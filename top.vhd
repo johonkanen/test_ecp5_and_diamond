@@ -83,14 +83,55 @@ architecture behavioral of top is
 	
 	signal test_data1 : std_logic_vector(31 downto 0) := x"0000acdc";
 	signal test_data2 : std_logic_vector(31 downto 0) := (20 => '1', others => '0');
-	signal test_data3 : std_logic_vector(31 downto 0) := x"00000001";
+	signal test_data3 : std_logic_vector(31 downto 0) := x"00000002";
 	signal test_data4 : std_logic_vector(31 downto 0) := x"00000002";
 	
 
 	signal mpy_out : std_logic_vector(63 downto 0) := (others => '0');
+	
+	---
+	use work.dual_port_ram_pkg.all;
+	
+	function init_ram return ram_array is
+		variable counter : unsigned(31 downto 0) := (others => '0');
+		variable retval : ram_array(0 to 511)(31 downto 0);
+	begin
+		for i in 0 to 511 loop
+			retval(i) := std_logic_vector(counter);
+			counter := counter + 1;
+		end loop;
+		
+		return retval;
+			
+	
+	end;
+
+    constant init_values : ram_array(0 to 511)(31 downto 0) := init_ram; --(others => (others => '0'));
+    constant dp_ram_subtype : dpram_ref_record := create_ref_subtypes(
+        datawidth      => 32
+        , addresswidth => 9);
+    signal ram_a_in  : dp_ram_subtype.ram_in'subtype := dp_ram_subtype.ram_in;
+    signal ram_a_out : dp_ram_subtype.ram_out'subtype;
+    --------------------
+    signal ram_b_in  : dp_ram_subtype.ram_in'subtype := dp_ram_subtype.ram_in;
+    signal ram_b_out : dp_ram_subtype.ram_out'subtype;
+
+	signal ram_data_pipe : std_logic_vector(1 downto 0) := (others => '0');
+	---
 
 	
 begin
+
+    u_dpram : entity work.dual_port_ram
+    generic map(dp_ram_subtype, init_values)
+    port map(
+    clk120Mhz  ,
+    ram_a_in   ,
+    ram_a_out  ,
+    --------------
+    ram_b_in  ,
+    ram_b_out);
+
 	u_main_clocks : main_pll
 	port map(CLKI => xclk
 	,CLKOP => clk120Mhz
@@ -193,15 +234,36 @@ begin
 			use work.fpga_interconnect_pkg.all;
 			variable data : std_logic_vector(31 downto 0);
 		begin
-			if rising_edge(clk120Mhz) then
+			if rising_edge(clk120Mhz) then	
+				bus_to_communications <= bus_from_top;
 			
 				init_bus(bus_from_top);
 				connect_read_only_data_to_address(bus_from_communications, bus_from_top, 1, std_logic_vector(resize(shift_right(signed(mpy_out),20),32)));
 				connect_data_to_address(bus_from_communications, bus_from_top, 2, test_data1);		
 				connect_data_to_address(bus_from_communications, bus_from_top, 3, test_data2);		
-				connect_data_to_address(bus_from_communications, bus_from_top, 4, test_data3);				
-				bus_to_communications <= bus_from_top;
-
+				connect_data_to_address(bus_from_communications, bus_from_top, 4, test_data3);			
+				
+				init_ram(ram_a_in);
+				ram_data_pipe <= ram_data_pipe(0) & '0';
+				
+				if read_is_requested(bus_from_communications) 
+					and get_address(bus_from_communications) >= 100
+					and get_address(bus_from_communications) <= 611
+				then
+					request_data_from_ram(ram_a_in, get_address(bus_from_communications) - 100);
+					ram_data_pipe(0) <= '1';
+				end if;
+				
+				if ram_read_is_ready(ram_a_out) then
+					write_data_to_address(bus_from_top, 0, get_ram_data(ram_a_out));
+				end if;
+				
+				if write_from_bus_is_requested(bus_from_communications)
+					and get_address(bus_from_communications) >= 100
+					and get_address(bus_from_communications) <= 611
+				then
+					write_data_to_ram(ram_b_in, get_address(bus_from_communications) - 100, get_slv_data(bus_from_communications));
+				end if;
 			
 			end if;
 		end process;
