@@ -86,7 +86,10 @@ architecture behavioral of top is
 	signal test_data3 : std_logic_vector(31 downto 0) := x"00000002";
 	signal test_data4 : std_logic_vector(31 downto 0) := x"00000002";
 	
+	signal mpya : signed(31 downto 0);
+	signal mpyb : signed(31 downto 0);
 
+	signal mpy_buf : signed(63 downto 0) := (others => '0');
 	signal mpy_out : std_logic_vector(63 downto 0) := (others => '0');
 	
 	---
@@ -267,7 +270,7 @@ begin
 			
 			end if;
 		end process;
-		
+		/*
 		u_mpy : mpy_32x32
 		port map(
 			 Clock => clk120Mhz
@@ -277,20 +280,35 @@ begin
 			,DataB => test_data2 
 			,Result => mpy_out
 		);
+		*/
 		
-	/*	process(clk120Mhz)
+
+		process(clk120Mhz, test_data3(1))
 		begin
-			if rising_edge(clk120MHz) then
+			if test_data3(1) = '1' then
+				mpya <= (others => '0');
+				mpyb <= (others => '0');
+			elsif rising_edge(clk120MHz) then
 				--p1
 				mpya <= signed(test_data1);
 				mpyb <= signed(test_data2);
 				--p2
-				mpy_buf <= mpya * mpyb;
-				--p3
-				mpy_out <= mpy_buf;
 			end if;
-		end process;*/
+		end process;
+		
+		mpy_buf <= mpya * mpyb;	
+		process(clk120Mhz, test_data3(1))
+		begin
+			if test_data3(1) = '1' then
+				mpy_out <= (others => '0');
+			elsif rising_edge(clk120MHz) then
+				--p2
+				mpy_out <= std_logic_vector(mpy_buf);
+				--p3
+			end if;
+		end process;
 
+				
 
 ------------------------------------------------------------------------
 end behavioral;
