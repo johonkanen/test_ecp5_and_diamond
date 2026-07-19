@@ -270,7 +270,9 @@ begin
 			
 			end if;
 		end process;
-		
+	
+		-- directly instantiating configured ip works
+		-- works
 		u_mpy : mpy_32x32
 		port map(
 			 Clock => clk120Mhz
@@ -282,7 +284,40 @@ begin
 		);
 		
 		
-/*
+		-- example modified to this project does not work
+		-- taken from appendixB of ECP5 and ECP5-5G sysDSP User Guide
+		-- https://www.latticesemi.com/view_document?document_id=50469
+		/*
+		u_mult : entity work.fixed_dsp
+		port map(
+			reset => test_data3(1)
+			, clk => clk120Mhz
+			,dataax => test_data1
+			,dataay => test_data2
+			,dataout => mpy_out
+			);
+			*/
+		
+		
+		/*
+		-- does not meet timing for some reason
+		mpy_buf <= mpya * mpyb;
+		process(clk120MHz)
+		begin
+			if rising_edge(clk120MHz) then
+				--p1
+				mpya <= signed(test_data1);
+				mpyb <= signed(test_data2);
+				--p2
+				mpy_out <= std_logic_vector(mpy_buf);
+			end if;
+		end process;
+		*/
+		
+		/*
+		-- also does not meet timing
+		-- taken from appendixB of ECP5 and ECP5-5G sysDSP User Guide
+		-- https://www.latticesemi.com/view_document?document_id=50469
 		process(clk120Mhz, test_data3(1))
 		begin
 			if test_data3(1) = '1' then
