@@ -270,7 +270,7 @@ begin
 			
 			end if;
 		end process;
-		/*
+		
 		u_mpy : mpy_32x32
 		port map(
 			 Clock => clk120Mhz
@@ -280,9 +280,9 @@ begin
 			,DataB => test_data2 
 			,Result => mpy_out
 		);
-		*/
 		
-
+		
+/*
 		process(clk120Mhz, test_data3(1))
 		begin
 			if test_data3(1) = '1' then
@@ -307,7 +307,7 @@ begin
 				--p3
 			end if;
 		end process;
-
+*/
 				
 
 ------------------------------------------------------------------------
