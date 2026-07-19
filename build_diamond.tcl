@@ -33,14 +33,16 @@ prj_strgy set_value -strategy Strategy1 syn_allow_dup_modules=True
 prj_strgy set_value -strategy Strategy1 syn_frequency=150
 prj_strgy set_value -strategy Strategy1 syn_fsm_encoding=True
 prj_strgy set_value -strategy Strategy1 syn_vhdl2008=True
+
+#make better fit
 prj_strgy set_value -strategy Strategy1 {syn_pipelining_retiming=Pipelining and Retiming}
 prj_strgy set_value -strategy Strategy1 par_place_iterator=3
 prj_strgy set_value -strategy Strategy1 par_route_delay_reduction_pass=4
 prj_strgy set_value -strategy Strategy1 par_routing_res_opt=4
+prj_strgy set_value -strategy Strategy1 par_stop_zero=True
 
 prj_strgy set_value -strategy Strategy1 syn_output_netlist_format=VHDL
 
-prj_strgy set_value -strategy Strategy1 par_stop_zero=True
 
 proc add_vhdl_file_to_project {vhdl_file} {
     prj_src add $vhdl_file
@@ -57,14 +59,15 @@ add_vhdl_file_to_project $path_to_this_file/source/fpga_communication/hVHDL_fpga
 add_vhdl_file_to_project $path_to_this_file/source/fpga_communication/fpga_interconnect_16bit_pkg.vhd
 add_vhdl_file_to_project $path_to_this_file/source/fpga_communication/ecp5/ecp5_communications.vhd
 add_vhdl_file_to_project $path_to_this_file/source/fpga_communication/ecp5/ecp5_serial_protocol_generic_pkg.vhd
-add_vhdl_file_to_project $path_to_this_file//source/hVHDL_microprogam_processor/source/hVHDL_memory_library/vhdl2008/dp_ram_w_configurable_recrods.vhd
-add_vhdl_file_to_project $path_to_this_file//source/hVHDL_microprogam_processor/source/hVHDL_memory_library/vhdl2008/arch_rtl_dp_ram_w_configurable_records.vhd
+add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/source/hVHDL_memory_library/vhdl2008/dp_ram_w_configurable_recrods.vhd
+add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/source/hVHDL_memory_library/vhdl2008/arch_rtl_dp_ram_w_configurable_records.vhd
 
 prj_src add -exclude $path_to_this_file/ecp5_compile.lpf
 prj_src enable $path_to_this_file/ecp5_compile.lpf
 prj_src remove ecp5_compile.lpf
 file delete -force ecp5_compile.lpf
 
+# build project
 prj_run Synthesis -impl impl1
 prj_run Translate -impl impl1
 prj_run Map -impl impl1
