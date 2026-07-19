@@ -1,11 +1,15 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.std_logic_unsigned.all;
+
+-- note this crashes diamond build if it is not instantiated
+-- also does not meet timing even though the direct instantion of configured ip does
+
 entity fixed_dsp is
 	port (
 			reset, clk : in std_logic := '0';
-			dataax, dataay : in std_logic_vector := (31 downto 0 => '0');
-			dataout : out std_logic_vector := (63 downto 0 => '0')
+			dataax, dataay : in std_logic_vector;
+			dataout : out std_logic_vector
 		);
 end;
 

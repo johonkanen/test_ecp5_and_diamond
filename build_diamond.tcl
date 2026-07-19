@@ -53,6 +53,10 @@ proc add_vhdl_file_to_library {vhdl_file library} {
 }
 
 add_vhdl_file_to_project $path_to_this_file/top.vhd
+
+# crashes the build if not instantiated
+# add_vhdl_file_to_project $path_to_this_file/fixed_dsp.vhd
+
 add_vhdl_file_to_project $path_to_this_file/source/fpga_communication/hVHDL_uart/uart_rx/uart_rx_pkg.vhd
 add_vhdl_file_to_project $path_to_this_file/source/fpga_communication/hVHDL_uart/uart_tx/uart_tx_pkg.vhd
 add_vhdl_file_to_project $path_to_this_file/source/fpga_communication/hVHDL_fpga_interconnect/fpga_interconnect_generic_pkg.vhd
