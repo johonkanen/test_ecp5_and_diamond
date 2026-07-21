@@ -66,6 +66,21 @@ architecture behavioral of top is
 			DataB: in  std_logic_vector(31 downto 0); 
 			Result: out  std_logic_vector(63 downto 0));
 	end component;
+		
+	component fmac
+		port (
+			CLK0: in  std_logic; 
+			CE0: in  std_logic; 
+			RST0: in  std_logic; 
+			ACCUMSLOAD: in  std_logic; 
+			ADDNSUB: in  std_logic; 
+			A: in  std_logic_vector(31 downto 0); 
+			B: in  std_logic_vector(31 downto 0); 
+			LD: in  std_logic_vector(81 downto 0); 
+			OVERFLOW: out  std_logic; 
+			ACCUM: out  std_logic_vector(81 downto 0)
+		);
+	end component;
 
 	signal clk120MHz : std_logic := '0';
 	signal clk240MHz : std_logic := '0';
@@ -83,13 +98,21 @@ architecture behavioral of top is
 	
 	signal test_data1 : std_logic_vector(31 downto 0) := x"0000acdc";
 	signal test_data2 : std_logic_vector(31 downto 0) := (20 => '1', others => '0');
+	
+	signal test_data1_buf : std_logic_vector(31 downto 0);
+	signal test_data2_buf : std_logic_vector(31 downto 0);
+	
 	signal test_data3 : std_logic_vector(31 downto 0) := x"00000002";
 	signal test_data4 : std_logic_vector(31 downto 0) := x"00000002";
 	
 	signal mpya : signed(31 downto 0);
 	signal mpyb : signed(31 downto 0);
 
-	signal mpy_buf : signed(63 downto 0) := (others => '0');
+    signal res : signed(63 downto 0);
+    signal res_buf : signed(63 downto 0);
+
+	signal mpy_buf : std_logic_vector(81 downto 0) := (others => '0');
+	signal mpy_buf2 : std_logic_vector(81 downto 0) := (others => '0');
 	signal mpy_out : std_logic_vector(63 downto 0) := (others => '0');
 	
 	---
@@ -241,10 +264,11 @@ begin
 				bus_to_communications <= bus_from_top;
 			
 				init_bus(bus_from_top);
-				connect_read_only_data_to_address(bus_from_communications, bus_from_top, 1, std_logic_vector(resize(shift_right(signed(mpy_out),20),32)));
+				connect_read_only_data_to_address(bus_from_communications, bus_from_top, 1, std_logic_vector(resize(shift_right(signed(res),20),32)));
 				connect_data_to_address(bus_from_communications, bus_from_top, 2, test_data1);		
 				connect_data_to_address(bus_from_communications, bus_from_top, 3, test_data2);		
 				connect_data_to_address(bus_from_communications, bus_from_top, 4, test_data3);			
+				connect_data_to_address(bus_from_communications, bus_from_top, 5, test_data4);			
 				
 				init_ram(ram_a_in);
 				ram_data_pipe <= ram_data_pipe(0) & '0';
@@ -275,13 +299,54 @@ begin
 		-- works
 		u_mpy : mpy_32x32
 		port map(
-			 Clock => clk120Mhz
-			,ClkEn => test_data3(0)
-			,Aclr => test_data3(1)
-			,DataA => test_data1 
-			,DataB => test_data2 
+			Clock   => clk120Mhz
+			,ClkEn  => test_data3(0)
+			,Aclr   => test_data3(1)
+			,DataA  => test_data1
+			,DataB  => test_data2
 			,Result => mpy_out
 		);
+        process(clk120Mhz) 
+        begin
+            if rising_edge(clk120Mhz) then
+				CASE test_data3(2) is
+				WHEN '1' =>
+					res <= signed(mpy_out) - shift_left(resize(signed(test_data4), res'length),20);
+				WHEN others => 
+					res <= signed(mpy_out) + shift_left(resize(signed(test_data4), res'length),20);
+				end CASE;
+            
+			end if;
+        end process;
+        
+/*
+		-- instantiated fmac does not meet timing
+		u_fmac : fmac
+		port map(
+            CLK0        => clk120Mhz
+            ,CE0        => test_data3(0)
+            ,RST0       => test_data3(1)
+            ,ACCUMSLOAD => '0'
+            ,ADDNSUB    => '0'
+            ,A          => test_data1_buf
+            ,B          => test_data2_buf
+            ,LD         => (others => '0')
+            ,OVERFLOW   => open
+            ,ACCUM      => mpy_buf2
+		);
+*/
+/*
+        process(clk120Mhz) 
+        begin
+            if rising_edge(clk120Mhz) then
+				test_data1_buf <= test_data1;
+				test_data2_buf <= test_data2;
+                mpy_buf <= mpy_buf2;
+                mpy_out <= mpy_buf;
+            end if;
+        end process;
+*/
+
 		
 		
 		-- example modified to this project does not work

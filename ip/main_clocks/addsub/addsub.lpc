@@ -1,0 +1,39 @@
+[Device]
+Family=ecp5u
+PartType=LFE5U-12F
+PartName=LFE5U-12F-8BG381C
+SpeedGrade=8
+Package=CABGA381
+OperatingCondition=COM
+Status=S
+
+[IP]
+VendorName=Lattice Semiconductor Corporation
+CoreType=LPM
+CoreStatus=Demo
+CoreName=Adder_Subtractor
+CoreRevision=3.5
+ModuleName=addsub
+SourceFormat=vhdl
+ParameterFileVersion=1.0
+Date=07/20/2026
+Time=17:06:37
+
+[Parameters]
+Verilog=0
+VHDL=1
+EDIF=1
+Destination=Synplicity
+Expression=BusA(0 to 7)
+Order=[MSB:LSB]
+IO=0
+InputWidth=64
+Representation=Signed
+UseCIport=0
+COport=None
+OutReg=1
+Complex=0
+Stage=3
+
+[Command]
+cmd_line= -w -n addsub -lang vhdl -synth synplify -bus_exp 7 -bb -arch sa5p00 -type mgaddsub -add_sub -width 64 -signed -output_reg -enable -pipeline 3
