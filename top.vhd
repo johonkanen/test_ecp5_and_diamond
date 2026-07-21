@@ -166,6 +166,14 @@ architecture behavioral of top is
 
 begin
 
+    u_data_ram : entity work.multi_port_ram
+    generic map(test_program)
+    port map(
+        clock => clk120Mhz
+        ,ram_read_in  => ram_read_in
+        ,ram_read_out => ram_read_out
+        ,ram_write_in => ram_write_in);
+
     u_dpram : entity work.dual_port_ram
     generic map(dp_ram_subtype, init_values)
     port map(

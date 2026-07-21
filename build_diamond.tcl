@@ -68,6 +68,9 @@ add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/s
 add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/vhdl2008/vhdl2008_microinstruction_pkg.vhd
 add_vhdl_file_to_project $path_to_this_file/microinstruction_pkg.vhd
 
+add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/vhdl2008/microprogram_sequencer.vhd
+add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/vhdl2008/addsub.vhd
+
 add_vhdl_file_to_project $path_to_this_file/top.vhd
 
 prj_src add -exclude $path_to_this_file/ecp5_compile.lpf
