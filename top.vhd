@@ -144,8 +144,26 @@ architecture behavioral of top is
 
 	signal ram_data_pipe : std_logic_vector(1 downto 0) := (others => '0');
 	---
+    use work.multi_port_ram_pkg.all;
+    constant ref_subtype : subtype_ref_record := 
+        create_ref_subtypes(readports => 2, datawidth => 32);
+    signal ram_read_in  : ref_subtype.ram_read_in'subtype;
+    signal ram_read_out : ref_subtype.ram_read_out'subtype;
+    signal ram_write_in : ref_subtype.ram_write_in'subtype;
 
-	
+    use work.microinstruction_pkg.all;
+    constant test_program : work.dual_port_ram_pkg.ram_array(0 to 511)(ref_subtype.data'range) := (
+        6   => sub( 96, 101,101)
+
+        , 7  => sub( 100 , 101 , 102)
+        , 8  => sub( 99  , 102 , 101)
+        , 9  => add( 98  , 103 , 104)
+        , 10 => add( 97  , 104 , 103)
+        , 11 => op(mpy_add , 96  , 101 , 104  , 105)
+        , 12 => op(mpy_add , 95  , 102 , 104  , 102)
+
+        , others => op(program_end));
+
 begin
 
     u_dpram : entity work.dual_port_ram

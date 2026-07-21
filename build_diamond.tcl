@@ -52,7 +52,6 @@ proc add_vhdl_file_to_library {vhdl_file library} {
     prj_src add $vhdl_file -work $library
 }
 
-add_vhdl_file_to_project $path_to_this_file/top.vhd
 
 # crashes the build if not instantiated
 # add_vhdl_file_to_project $path_to_this_file/fixed_dsp.vhd
@@ -65,6 +64,11 @@ add_vhdl_file_to_project $path_to_this_file/source/fpga_communication/ecp5/ecp5_
 add_vhdl_file_to_project $path_to_this_file/source/fpga_communication/ecp5/ecp5_serial_protocol_generic_pkg.vhd
 add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/source/hVHDL_memory_library/vhdl2008/dp_ram_w_configurable_recrods.vhd
 add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/source/hVHDL_memory_library/vhdl2008/arch_rtl_dp_ram_w_configurable_records.vhd
+add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/source/hVHDL_memory_library/vhdl2008/mpram_w_configurable_records.vhd
+add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/vhdl2008/vhdl2008_microinstruction_pkg.vhd
+add_vhdl_file_to_project $path_to_this_file/microinstruction_pkg.vhd
+
+add_vhdl_file_to_project $path_to_this_file/top.vhd
 
 prj_src add -exclude $path_to_this_file/ecp5_compile.lpf
 prj_src enable $path_to_this_file/ecp5_compile.lpf
