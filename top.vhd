@@ -150,14 +150,35 @@ architecture behavioral of top is
     signal ram_b_in  : dp_ram_subtype.ram_in'subtype := dp_ram_subtype.ram_in;
     signal ram_b_out : dp_ram_subtype.ram_out'subtype;
 
-	signal ram_data_pipe : std_logic_vector(1 downto 0) := (others => '0');
 	---
+
+    -- microprogram processor start
+    use work.instruction_pkg.all;
+    constant instruction_length : natural := 32;
+    constant word_length        : natural := 32;
+    constant used_radix         : natural := 20;
+
     use work.multi_port_ram_pkg.all;
-    constant ref_subtype : subtype_ref_record := 
-        create_ref_subtypes(readports => 2, datawidth => 32);
+    constant ref_subtype       : subtype_ref_record := 
+        create_ref_subtypes(readports => 3 
+        , datawidth => word_length        
+        , addresswidth => 10);
+
+    constant instr_ref_subtype : subtype_ref_record := 
+        create_ref_subtypes(readports => 1 
+        , datawidth => instruction_length 
+        , addresswidth => 10);
+
     signal ram_read_in  : ref_subtype.ram_read_in'subtype;
     signal ram_read_out : ref_subtype.ram_read_out'subtype;
     signal ram_write_in : ref_subtype.ram_write_in'subtype;
+
+    signal mc_output   : ref_subtype.ram_write_in'subtype;
+    signal mc_write_in : ref_subtype.ram_write_in'subtype := ref_subtype.ram_write_in;
+
+    use work.microprogram_processor_pkg.all;
+    signal mproc_in     : microprogram_processor_in_record;
+    signal mproc_out    : microprogram_processor_out_record;
 
     use work.microinstruction_pkg.all;
     constant test_program : work.dual_port_ram_pkg.ram_array(0 to 511)(ref_subtype.data'range) := (
@@ -172,36 +193,34 @@ architecture behavioral of top is
 
         , others => op(program_end));
 
-    use work.instruction_pkg.all;
+    constant instruction_in_ref : instruction_in_record := (
+        instr_ram_read_out => instr_ref_subtype.ram_read_out
+        ,data_read_out     => ref_subtype.ram_read_out
+        ,instr_pipeline    => (0 to 7 => op(nop))
+        );
 
-    -- component microprogram_controller is
-    -- generic(
-    --         g_number_of_pipeline_stages : natural := 11
-    --         ;g_addresswidth             : natural := 10
-    --         ;g_data_bit_width           : natural := 32
-    --         ;g_instruction_bit_width    : natural := 32
-    --         ;g_program                  : work.dual_port_ram_pkg.ram_array
-    --         ;g_data                     : work.dual_port_ram_pkg.ram_array
-    --         ;g_idle_ram_write           : ram_write_in_record := init_write_in(g_addresswidth, g_data_bit_width)
-    --        );
-    -- port(
-    --     clock        : in std_logic
-    --     -- ;mproc_in    : in work.microprogram_processor_pkg.microprogram_processor_in_record
-    --     -- ;mproc_out   : out work.microprogram_processor_pkg.microprogram_processor_out_record
-    --     ;mc_output   : out ram_write_in_record
-    --     ;mc_write_in : in ram_write_in_record := g_idle_ram_write
-    --     ------ instruction entity connection
-    --     ;instruction_in  : out instruction_in_record
-    --     ;instruction_out : in instruction_out_record
-    -- ); end component;
+    constant instruction_out_ref : instruction_out_record := (
+        data_read_in  => ref_subtype.ram_read_in
+        ,ram_write_in => ref_subtype.ram_write_in
+        );
 
--- end microprogram_controller;
+    signal addsub_in  : instruction_in_ref'subtype  := instruction_in_ref;
+    signal addsub_out : instruction_out_ref'subtype := instruction_out_ref;
+    -- microprogram processor end
 
 begin
 
-    -- u_mproc : entity work.microprogram_controller
-    -- generic map(g_program => test_program, g_data => test_program, g_idle_ram_write => ref_subtype.ram_write_in)
-    -- port map(
+    u_mproc : entity work.microprogram_controller
+    generic map(g_program => test_program, g_data => test_program, g_idle_ram_write => ref_subtype.ram_write_in)
+    port map(
+            clock => clk120Mhz
+            ,mproc_in => mproc_in
+            ,mproc_out => mproc_out
+            ,mc_output => mc_output
+            ,mc_write_in => mc_write_in
+            ,instruction_in => addsub_in
+            ,instruction_out => addsub_out
+        );
 
     u_data_ram : entity work.multi_port_ram
     generic map(test_program)
@@ -360,14 +379,12 @@ begin
 				connect_data_to_address(bus_from_communications, bus_from_top, 7, test_data6);			
 				
 				init_ram(ram_a_in);
-				ram_data_pipe <= ram_data_pipe(0) & '0';
 				
 				if read_is_requested(bus_from_communications) 
 					and get_address(bus_from_communications) >= 100
 					and get_address(bus_from_communications) <= 611
 				then
 					request_data_from_ram(ram_a_in, get_address(bus_from_communications) - 100);
-					ram_data_pipe(0) <= '1';
 				end if;
 				
 				if ram_read_is_ready(ram_a_out) then
