@@ -104,6 +104,8 @@ architecture behavioral of top is
 	
 	signal test_data3 : std_logic_vector(31 downto 0) := x"00000002";
 	signal test_data4 : std_logic_vector(31 downto 0) := x"00000002";
+	signal test_data5 : std_logic_vector(31 downto 0);
+	signal test_data6 : std_logic_vector(31 downto 0);
 	
 	signal mpya : signed(31 downto 0);
 	signal mpyb : signed(31 downto 0);
@@ -114,6 +116,12 @@ architecture behavioral of top is
 	signal mpy_buf : std_logic_vector(81 downto 0) := (others => '0');
 	signal mpy_buf2 : std_logic_vector(81 downto 0) := (others => '0');
 	signal mpy_out : std_logic_vector(63 downto 0) := (others => '0');
+
+    signal pwm_counter1 : natural range 0 to 2**15-1;
+    signal pwm1 : std_logic := '0';
+
+    signal pwm_counter2 : natural range 0 to 2**15-1;
+    signal pwm2 : std_logic := '0';
 	
 	---
 	use work.dual_port_ram_pkg.all;
@@ -164,7 +172,36 @@ architecture behavioral of top is
 
         , others => op(program_end));
 
+    use work.instruction_pkg.all;
+
+    -- component microprogram_controller is
+    -- generic(
+    --         g_number_of_pipeline_stages : natural := 11
+    --         ;g_addresswidth             : natural := 10
+    --         ;g_data_bit_width           : natural := 32
+    --         ;g_instruction_bit_width    : natural := 32
+    --         ;g_program                  : work.dual_port_ram_pkg.ram_array
+    --         ;g_data                     : work.dual_port_ram_pkg.ram_array
+    --         ;g_idle_ram_write           : ram_write_in_record := init_write_in(g_addresswidth, g_data_bit_width)
+    --        );
+    -- port(
+    --     clock        : in std_logic
+    --     -- ;mproc_in    : in work.microprogram_processor_pkg.microprogram_processor_in_record
+    --     -- ;mproc_out   : out work.microprogram_processor_pkg.microprogram_processor_out_record
+    --     ;mc_output   : out ram_write_in_record
+    --     ;mc_write_in : in ram_write_in_record := g_idle_ram_write
+    --     ------ instruction entity connection
+    --     ;instruction_in  : out instruction_in_record
+    --     ;instruction_out : in instruction_out_record
+    -- ); end component;
+
+-- end microprogram_controller;
+
 begin
+
+    -- u_mproc : entity work.microprogram_controller
+    -- generic map(g_program => test_program, g_data => test_program, g_idle_ram_write => ref_subtype.ram_write_in)
+    -- port map(
 
     u_data_ram : entity work.multi_port_ram
     generic map(test_program)
@@ -189,7 +226,7 @@ begin
 	,CLKOP => clk120Mhz
 	,CLKOS => clk240Mhz);
 	
-	rgb_led1 <= led1_buffer;
+    rgb_led1 <= (0 => led1_buffer(0) or pwm1, others => '1');
 	process(clk120Mhz) is
 	begin
 		if rising_edge(clk120Mhz) then
@@ -202,11 +239,23 @@ begin
 			if counter_120Mhz = 0 then
 			 led1_buffer <= (0 => not led1_buffer(0) , others => '1');
 			end if;
+
+            if pwm_counter1 < 2**15-1 then
+                pwm_counter1 <= pwm_counter1 + 1;
+            else
+                pwm_counter1 <= 0;
+            end if;
+
+            if pwm_counter1 < unsigned(test_data5(15 downto 0)) then
+                pwm1 <= '1';
+            else
+                pwm1 <= '0';
+            end if;
 		
 		end if;
 	end process;
 	
-	rgb_led2 <= led2_buffer;
+    rgb_led2 <= (1 => led2_buffer(1) or pwm2, others => '1');
 	process(clk240Mhz) is
 	begin
 		if rising_edge(clk240Mhz) then
@@ -219,6 +268,18 @@ begin
 			if counter_240Mhz = 0 then
 			 led2_buffer <= (1 => not led2_buffer(1), others => '1');
 			end if;
+
+            if pwm_counter2 < 2**15-1 then
+                pwm_counter2 <= pwm_counter2 + 1;
+            else
+                pwm_counter2 <= 0;
+            end if;
+
+            if pwm_counter2 < unsigned(test_data6(15 downto 0)) then
+                pwm2 <= '1';
+            else
+                pwm2 <= '0';
+            end if;
 		end if;
 	end process;
 
@@ -265,7 +326,7 @@ begin
 
        -- rgb_led1 <= (others => '0');
         --rgb_led2 <= (others => '0');
-        rgb_led3 <= (others => '0');
+        rgb_led3 <= (others => '1');
 		
 		u_communications : entity work.fpga_communications
 		generic map(
@@ -295,6 +356,8 @@ begin
 				connect_data_to_address(bus_from_communications, bus_from_top, 3, test_data2);		
 				connect_data_to_address(bus_from_communications, bus_from_top, 4, test_data3);			
 				connect_data_to_address(bus_from_communications, bus_from_top, 5, test_data4);			
+				connect_data_to_address(bus_from_communications, bus_from_top, 6, test_data5);			
+				connect_data_to_address(bus_from_communications, bus_from_top, 7, test_data6);			
 				
 				init_ram(ram_a_in);
 				ram_data_pipe <= ram_data_pipe(0) & '0';
