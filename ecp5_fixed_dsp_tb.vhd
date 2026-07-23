@@ -19,6 +19,16 @@ architecture vunit_simulation of ecp5_fixed_dsp_tb is
     signal simulator_clock     : std_logic := '0';
     signal simulation_counter  : natural   := 0;
 
+    ----------
+    -- signal a : signed(31 downto 0) := others => '0')
+    use work.real_to_fixed_pkg.all;
+
+    function to_fixed is new generic_to_fixed generic map(word_length => 32, used_radix => 20);
+
+    signal a : std_logic_vector(31 downto 0) :=to_fixed(1.0);
+    signal b : std_logic_vector(31 downto 0) :=to_fixed(1.0);
+    signal result : std_logic_vector(63 downto 0);
+
 begin
 
 ------------------------------------------------------------------------
@@ -38,7 +48,26 @@ begin
     begin
         if rising_edge(simulator_clock) then
             simulation_counter <= simulation_counter + 1;
+            CASE simulation_counter is
+                WHEN 0 => 
+                    a <= to_fixed(1.0);
+                    b <= to_fixed(-1.0);
+                WHEN 1 => 
+                    a <= to_fixed(-2.0);
+                    b <= to_fixed(-1.0);
+                WHEN others => -- do nothing
+            end CASE;
         end if; -- rising_edge
     end process stimulus;	
+
+    u_mpy32x32 : entity work.mpy_32x32
+    port map(
+        clock => simulator_clock
+        ,ClkEn => '1'
+        ,Aclr => '0'
+        ,DataA => a
+        ,DataB => b
+        ,Result => result
+    );
 
 end vunit_simulation;
