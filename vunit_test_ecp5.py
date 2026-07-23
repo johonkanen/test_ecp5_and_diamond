@@ -16,7 +16,7 @@ args, vunit_args = parser.parse_known_args()
 
 # ROOT
 ROOT = Path(__file__).resolve().parent
-VU = VUnit.from_argv(compile_builtins=False)
+VU = VUnit.from_argv()
 MPROC = "source/hVHDL_microprogam_processor"
 
 
