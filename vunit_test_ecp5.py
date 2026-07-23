@@ -50,6 +50,10 @@ v2008.add_source_files(ROOT / MPROC / "vhdl2008/arch_float_mult_add.vhd")
 v2008.add_source_files(ROOT / MPROC / "vhdl2008/arch_fixed_mult_add.vhd")
 v2008.add_source_files(ROOT / MPROC / "testbenches/vhdl2008/float_microprocessor_tb.vhd")
 
+
+v2008.add_source_files(ROOT / "ecp5_fixed_dsp_tb.vhd")
+
+
 if args.dump_arrays:
     VU.set_sim_option("nvc.sim_flags", ["-w", "--dump-arrays"])
 

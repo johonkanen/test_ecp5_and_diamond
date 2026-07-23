@@ -67,21 +67,6 @@ architecture behavioral of top is
 			Result: out  std_logic_vector(63 downto 0));
 	end component;
 		
-	component fmac
-		port (
-			CLK0: in  std_logic; 
-			CE0: in  std_logic; 
-			RST0: in  std_logic; 
-			ACCUMSLOAD: in  std_logic; 
-			ADDNSUB: in  std_logic; 
-			A: in  std_logic_vector(31 downto 0); 
-			B: in  std_logic_vector(31 downto 0); 
-			LD: in  std_logic_vector(81 downto 0); 
-			OVERFLOW: out  std_logic; 
-			ACCUM: out  std_logic_vector(81 downto 0)
-		);
-	end component;
-
 	signal clk120MHz : std_logic := '0';
 	signal clk240MHz : std_logic := '0';
 	
@@ -123,7 +108,8 @@ architecture behavioral of top is
     signal pwm_counter2 : natural range 0 to 2**15-1;
     signal pwm2 : std_logic := '0';
 	
-	---
+	-----------------------------
+	-----------------------------
 	use work.dual_port_ram_pkg.all;
 	
 	function init_ram return ram_array is
@@ -136,9 +122,9 @@ architecture behavioral of top is
 		end loop;
 		
 		return retval;
-			
-	
 	end;
+	-----------------------------
+	-----------------------------
 
     constant init_values : ram_array(0 to 511)(31 downto 0) := init_ram; --(others => (others => '0'));
     constant dp_ram_subtype : dpram_ref_record := create_ref_subtypes(
@@ -407,8 +393,8 @@ begin
 		u_mpy : mpy_32x32
 		port map(
 			Clock   => clk120Mhz
-			,ClkEn  => test_data3(0)
-			,Aclr   => test_data3(1)
+			,ClkEn  => '1'
+			,Aclr   => '0'
 			,DataA  => test_data1
 			,DataB  => test_data2
 			,Result => mpy_out
@@ -416,7 +402,7 @@ begin
         process(clk120Mhz) 
         begin
             if rising_edge(clk120Mhz) then
-				CASE test_data3(3 downto 2) is
+				CASE test_data3(1 downto 0) is
                     WHEN "00" =>
                         res_buf <= signed(mpy_out) + shift_left(resize(signed(test_data4), res'length),20);
                     WHEN "01" =>
