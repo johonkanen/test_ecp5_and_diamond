@@ -39,6 +39,8 @@ architecture vunit_simulation of ecp5_fixed_dsp_tb is
     signal result : signed(63 downto 0);
 
     -- (a +/- d) * b +/- c
+    signal accumulate_with_1 : std_logic := '0';
+    signal ready : std_logic := '0';
 
 begin
 
@@ -59,14 +61,29 @@ begin
     begin
         if rising_edge(simulator_clock) then
             simulation_counter <= simulation_counter + 1;
+            a <= to_fixed(0.0);
+            b <= to_fixed(0.0);
+            d <= to_fixed(0.0);
+            c <= to_fixed(0.0);
             CASE simulation_counter is
-                WHEN 0 => 
+                WHEN 2 => 
                     a <= to_fixed(1.0);
-                    b <= to_fixed(-1.0);
-                WHEN 1 => 
-                    a <= to_fixed(-2.0);
-                    b <= to_fixed(-1.0);
+                    b <= to_fixed(1.0);
+                    d <= to_fixed(0.0);
+                    accumulate_with_1 <= '1';
+                WHEN 3 => 
+                    a <= to_fixed(1.0);
+                    b <= to_fixed(1.0);
+                    d <= to_fixed(0.0);
+                    accumulate_with_1 <= '1';
+                WHEN 4 => 
+                    a <= to_fixed(1.0);
+                    b <= to_fixed(1.0);
+                    d <= to_fixed(0.0);
+                    c <= to_fixed(1.0);
+                    accumulate_with_1 <= '1';
                 WHEN others => -- do nothing
+                    accumulate_with_1 <= '0';
             end CASE;
         end if; -- rising_edge
     end process stimulus;	
@@ -75,16 +92,20 @@ begin
     generic map(g_radix => 20)
     port map(
         clock => simulator_clock
-        ,a => a
-        ,d => d
-        ,b => b
-        ,c => c
-        ,accumulate_with_1        => '0'
-        ,pre_subtract_with_1      => '0'
-        ,post_subtract_with_1     => '0'
-        ,invert_result_with_1     => '0'
-        ,reset_accumulator_with_1 => '0'
-        ,result => result
+        ,fixed_dsp_in.a => a
+        ,fixed_dsp_in.d => d
+        ,fixed_dsp_in.b => b
+        ,fixed_dsp_in.c => c
+
+        ,fixed_dsp_in.request_with_1       => '1'
+        ,fixed_dsp_in.accumulate_with_1    => accumulate_with_1
+        ,fixed_dsp_in.pre_subtract_with_1  => '0'
+        ,fixed_dsp_in.post_subtract_with_1 => '0'
+        ,fixed_dsp_in.invert_result_with_1 => '0'
+        ,fixed_dsp_in.reset_accumulator_with_1 => '0'
+
+        ,ready_with_1 => ready
+        ,result       => result
     );
 
 end vunit_simulation;
