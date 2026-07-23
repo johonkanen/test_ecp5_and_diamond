@@ -104,8 +104,8 @@ architecture behavioral of top is
 	
 	signal test_data3 : std_logic_vector(31 downto 0) := x"00000002";
 	signal test_data4 : std_logic_vector(31 downto 0) := x"00000002";
-	signal test_data5 : std_logic_vector(31 downto 0);
-	signal test_data6 : std_logic_vector(31 downto 0);
+	signal test_data5 : std_logic_vector(31 downto 0) := x"000061ab";
+	signal test_data6 : std_logic_vector(31 downto 0) := x"00007d00";
 	
 	signal mpya : signed(31 downto 0);
 	signal mpyb : signed(31 downto 0);
