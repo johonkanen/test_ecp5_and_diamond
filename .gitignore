@@ -3,3 +3,6 @@
 *.ccl
 *.sty
 *.xml
+*.fst*
+vunit_out
+build

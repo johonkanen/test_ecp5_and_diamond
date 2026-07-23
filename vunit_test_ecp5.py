@@ -1,5 +1,5 @@
-
 #!/usr/bin/env python3
+
 from pathlib import Path
 from vunit import VUnit
 import argparse
@@ -13,10 +13,9 @@ parser.add_argument(
 )
 args, vunit_args = parser.parse_known_args()
 
-
-# ROOT
 ROOT = Path(__file__).resolve().parent
-VU = VUnit.from_argv()
+VU = VUnit.from_argv(vunit_args)
+
 MPROC = "source/hVHDL_microprogam_processor"
 
 
@@ -51,6 +50,7 @@ v2008.add_source_files(ROOT / MPROC / "vhdl2008/arch_fixed_mult_add.vhd")
 v2008.add_source_files(ROOT / MPROC / "testbenches/vhdl2008/float_microprocessor_tb.vhd")
 
 
+v2008.add_source_files(ROOT / "sim_mpy32x32.vhd")
 v2008.add_source_files(ROOT / "ecp5_fixed_dsp_tb.vhd")
 
 
