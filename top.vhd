@@ -214,11 +214,12 @@ begin
     generic map(g_program => test_program, g_data => test_program, g_idle_ram_write => ref_subtype.ram_write_in)
     port map(
             clock => clk120Mhz
-            ,mproc_in => mproc_in
-            ,mproc_out => mproc_out
-            ,mc_output => mc_output
-            ,mc_write_in => mc_write_in
-            ,instruction_in => addsub_in
+
+            ,mproc_in        => mproc_in
+            ,mproc_out       => mproc_out
+            ,mc_output       => mc_output
+            ,mc_write_in     => mc_write_in
+            ,instruction_in  => addsub_in
             ,instruction_out => addsub_out
         );
 
@@ -415,12 +416,17 @@ begin
         process(clk120Mhz) 
         begin
             if rising_edge(clk120Mhz) then
-				CASE test_data3(2) is
-				WHEN '1' =>
-					res <= signed(mpy_out) - shift_left(resize(signed(test_data4), res'length),20);
-				WHEN others => 
-					res <= signed(mpy_out) + shift_left(resize(signed(test_data4), res'length),20);
-				end CASE;
+				CASE test_data3(3 downto 2) is
+                    WHEN "00" =>
+                        res_buf <= signed(mpy_out) + shift_left(resize(signed(test_data4), res'length),20);
+                    WHEN "01" =>
+                        res_buf <= signed(mpy_out) - shift_left(resize(signed(test_data4), res'length),20);
+                    WHEN "10" =>
+                        res_buf <= signed(mpy_out) - res_buf;
+                    WHEN others => --"11"
+                        res_buf <= signed(mpy_out) + res_buf;
+                end CASE;
+                res <= res_buf;
             
 			end if;
         end process;
