@@ -42,6 +42,8 @@ architecture vunit_simulation of ecp5_fixed_dsp_tb is
     signal accumulate_with_1 : std_logic := '0';
     signal ready : std_logic := '0';
 
+    signal request_with_1 : std_logic := '0';
+
 begin
 
 ------------------------------------------------------------------------
@@ -65,23 +67,27 @@ begin
             b <= to_fixed(0.0);
             d <= to_fixed(0.0);
             c <= to_fixed(0.0);
+            request_with_1 <= '0';
             CASE simulation_counter is
                 WHEN 2 => 
                     a <= to_fixed(1.0);
                     b <= to_fixed(1.0);
                     d <= to_fixed(0.0);
                     accumulate_with_1 <= '1';
+                    request_with_1 <= '1';
                 WHEN 3 => 
                     a <= to_fixed(1.0);
                     b <= to_fixed(1.0);
-                    d <= to_fixed(0.0);
+                    d <= to_fixed(1.0);
                     accumulate_with_1 <= '1';
-                WHEN 4 => 
+                    request_with_1 <= '1';
+                WHEN 5 => 
                     a <= to_fixed(1.0);
                     b <= to_fixed(1.0);
                     d <= to_fixed(0.0);
                     c <= to_fixed(1.0);
                     accumulate_with_1 <= '1';
+                    request_with_1 <= '1';
                 WHEN others => -- do nothing
                     accumulate_with_1 <= '0';
             end CASE;
@@ -97,7 +103,7 @@ begin
         ,fixed_dsp_in.b => b
         ,fixed_dsp_in.c => c
 
-        ,fixed_dsp_in.request_with_1       => '1'
+        ,fixed_dsp_in.request_with_1       => request_with_1
         ,fixed_dsp_in.accumulate_with_1    => accumulate_with_1
         ,fixed_dsp_in.pre_subtract_with_1  => '0'
         ,fixed_dsp_in.post_subtract_with_1 => '0'

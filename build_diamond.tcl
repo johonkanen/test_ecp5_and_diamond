@@ -76,6 +76,8 @@ add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/v
 add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/vhdl2008/addsub.vhd
 add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/vhdl2008/fixed_dsp.vhd
 add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/vhdl2008/arch_rtl_fixed_dsp.vhd
+
+add_vhdl_file_to_project $path_to_this_file/arch_ecp5_fixed_dsp.vhd
 # end microprogram processor modules
 
 add_vhdl_file_to_project $path_to_this_file/top.vhd

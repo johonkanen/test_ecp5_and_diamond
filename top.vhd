@@ -387,35 +387,55 @@ begin
 			
 			end if;
 		end process;
-	
+
+        u_ecp5_fixed_dsp : entity work.ecp5_fixed_dsp
+        generic map(g_radix => 20)
+        port map(
+            clock => clk120Mhz
+            ,fixed_dsp_in.a => signed(test_data1)
+            ,fixed_dsp_in.d => signed(test_data3)
+            ,fixed_dsp_in.b => signed(test_data2)
+            ,fixed_dsp_in.c => signed(test_data4)
+
+            ,fixed_dsp_in.request_with_1       => '1'
+            ,fixed_dsp_in.accumulate_with_1    => '0'
+            ,fixed_dsp_in.pre_subtract_with_1  => '0'
+            ,fixed_dsp_in.post_subtract_with_1 => '0'
+            ,fixed_dsp_in.invert_result_with_1 => '0'
+            ,fixed_dsp_in.reset_accumulator_with_1 => '0'
+
+            ,ready_with_1 => open
+            ,result       => res
+        );
+
 		-- directly instantiating configured ip works
 		-- works
-		u_mpy : mpy_32x32
-		port map(
-			Clock   => clk120Mhz
-			,ClkEn  => '1'
-			,Aclr   => '0'
-			,DataA  => test_data1
-			,DataB  => test_data2
-			,Result => mpy_out
-		);
-        process(clk120Mhz) 
-        begin
-            if rising_edge(clk120Mhz) then
-				CASE test_data3(1 downto 0) is
-                    WHEN "00" =>
-                        res_buf <= signed(mpy_out) + shift_left(resize(signed(test_data4), res'length),20);
-                    WHEN "01" =>
-                        res_buf <= signed(mpy_out) - shift_left(resize(signed(test_data4), res'length),20);
-                    WHEN "10" =>
-                        res_buf <= signed(mpy_out) - res_buf;
-                    WHEN others => --"11"
-                        res_buf <= signed(mpy_out) + res_buf;
-                end CASE;
-                res <= res_buf;
-            
-			end if;
-        end process;
+		-- u_mpy : mpy_32x32
+		-- port map(
+		-- 	Clock   => clk120Mhz
+		-- 	,ClkEn  => '1'
+		-- 	,Aclr   => '0'
+		-- 	,DataA  => test_data1
+		-- 	,DataB  => test_data2
+		-- 	,Result => mpy_out
+		-- );
+		--       process(clk120Mhz) 
+		--       begin
+		--           if rising_edge(clk120Mhz) then
+		-- 		CASE test_data3(1 downto 0) is
+		--                   WHEN "00" =>
+		--                       res_buf <= signed(mpy_out) + shift_left(resize(signed(test_data4), res'length),20);
+		--                   WHEN "01" =>
+		--                       res_buf <= signed(mpy_out) - shift_left(resize(signed(test_data4), res'length),20);
+		--                   WHEN "10" =>
+		--                       res_buf <= signed(mpy_out) - res_buf;
+		--                   WHEN others => --"11"
+		--                       res_buf <= signed(mpy_out) + res_buf;
+		--               end CASE;
+		--               res <= res_buf;
+		--
+		-- 	end if;
+		--       end process;
         
 /*
 		-- instantiated fmac does not meet timing

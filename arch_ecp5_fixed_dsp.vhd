@@ -5,10 +5,10 @@ library ieee;
 package fixed_dsp_pkg is 
 
     type fixed_dsp_in_record is record
-        a : signed;
-        d : signed;
-        b : signed;
-        c : signed;
+        a : signed(31 downto 0);
+        d : signed(31 downto 0);
+        b : signed(31 downto 0);
+        c : signed(31 downto 0);
 
         request_with_1           : std_logic;
         accumulate_with_1        : std_logic; -- 0=p <= p + (a*b)
@@ -63,7 +63,7 @@ entity ecp5_fixed_dsp is
         ;fixed_dsp_in : in fixed_dsp_in_record
 
         ;ready_with_1 : out std_logic
-        ;result : out signed
+        ;result : out signed(63 downto 0)
     );
 end entity;
 
@@ -83,6 +83,8 @@ architecture ecp5 of ecp5_fixed_dsp is
 
     signal arg : std_logic_vector(0 to 1);
 
+    signal ready_pipeline : std_logic_vector(4 downto 0) := (others => '0');
+
 begin
 
     pre <= fixed_dsp_in.a + fixed_dsp_in.d when fixed_dsp_in.pre_subtract_with_1 = '0'
@@ -99,10 +101,13 @@ begin
     );
 
     arg <= (0 => buf_accumulate(2) , 1 => buf_post_subtract(2));
+    ready_with_1 <= ready_pipeline(ready_pipeline'high);
 
     process(clock) 
     begin
         if rising_edge(clock) then
+
+            ready_pipeline <= ready_pipeline(ready_pipeline'high-1 downto 0) & fixed_dsp_in.request_with_1;
 
             buf_accumulate              <= buf_accumulate(buf_accumulate'high-1 downto 0) & fixed_dsp_in.accumulate_with_1;
             buf_pre_subtract            <= buf_pre_subtract(buf_pre_subtract'high-1 downto 0) & fixed_dsp_in.pre_subtract_with_1;
