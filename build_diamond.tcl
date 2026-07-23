@@ -84,10 +84,10 @@ add_vhdl_file_to_project $path_to_this_file/arch_ecp5_fixed_dsp.vhd
 
 add_vhdl_file_to_project $path_to_this_file/top.vhd
 
-# prj_src add -exclude $path_to_this_file/ecp5_compile.lpf
-# prj_src enable $path_to_this_file/ecp5_compile.lpf
-# prj_src remove ecp5_compile.lpf
-# file delete -force ecp5_compile.lpf
+prj_src add -exclude $path_to_this_file/ecp5_compile.lpf
+prj_src enable $path_to_this_file/ecp5_compile.lpf
+prj_src remove ecp5_compile.lpf
+file delete -force ecp5_compile.lpf
 
 # build project
 prj_run Synthesis -impl impl1
