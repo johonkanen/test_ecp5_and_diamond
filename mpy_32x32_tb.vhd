@@ -23,22 +23,11 @@ architecture vunit_simulation of ecp5_fixed_dsp_tb is
     -- signal a : signed(31 downto 0) := others => '0')
     use work.real_to_fixed_pkg.all;
 
-    function to_fixed (a : real) return signed is
-        variable retval : signed(31 downto 0);
-    begin
-        retval := to_fixed(a, 32, 20);
+    function to_fixed is new generic_to_fixed generic map(word_length => 32, used_radix => 20);
 
-        return retval;
-
-    end function;
-
-    signal a : signed(31 downto 0) :=to_fixed(1.0);
-    signal b : signed(31 downto 0) :=to_fixed(1.0);
-    signal c : signed(31 downto 0) :=to_fixed(1.0);
-    signal d : signed(31 downto 0) :=to_fixed(1.0);
-    signal result : signed(63 downto 0);
-
-    -- (a +/- d) * b +/- c
+    signal a : std_logic_vector(31 downto 0) :=to_fixed(1.0);
+    signal b : std_logic_vector(31 downto 0) :=to_fixed(1.0);
+    signal result : std_logic_vector(63 downto 0);
 
 begin
 
@@ -71,20 +60,14 @@ begin
         end if; -- rising_edge
     end process stimulus;	
 
-    u_ecp5_fixed_dsp : entity work.ecp5_fixed_dsp
-    generic map(g_radix => 20)
+    u_mpy32x32 : entity work.mpy_32x32
     port map(
         clock => simulator_clock
-        ,a => a
-        ,d => d
-        ,b => b
-        ,c => c
-        ,accumulate_with_1        => '0'
-        ,pre_subtract_with_1      => '0'
-        ,post_subtract_with_1     => '0'
-        ,invert_result_with_1     => '0'
-        ,reset_accumulator_with_1 => '0'
-        ,result => result
+        ,ClkEn => '1'
+        ,Aclr => '0'
+        ,DataA => a
+        ,DataB => b
+        ,Result => result
     );
 
 end vunit_simulation;

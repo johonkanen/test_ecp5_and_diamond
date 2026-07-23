@@ -51,6 +51,7 @@ v2008.add_source_files(ROOT / MPROC / "testbenches/vhdl2008/float_microprocessor
 
 
 v2008.add_source_files(ROOT / "sim_mpy32x32.vhd")
+v2008.add_source_files(ROOT / "arch_ecp5_fixed_dsp.vhd")
 v2008.add_source_files(ROOT / "ecp5_fixed_dsp_tb.vhd")
 
 
