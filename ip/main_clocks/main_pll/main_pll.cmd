@@ -1,9 +1,9 @@
 PROJECT: main_pll
-		working_path: "C:/dev/tubepsu/ip/main_clocks/main_pll/syn_results"
+		working_path: "C:/dev/test_ecp5_and_diamond/ip/main_clocks/main_pll/syn_results"
 		module: main_pll
-		verilog_file_list: "C:/dev/tubepsu/ip/main_clocks/main_pll/main_pll.vhd"
+		verilog_file_list: "C:/dev/test_ecp5_and_diamond/ip/main_clocks/main_pll/main_pll.vhd"
 		vlog_std_v2001: true
-		constraint_file_name: "C:/dev/tubepsu/ip/main_clocks/main_pll/main_pll.fdc"
+		constraint_file_name: "C:/dev/test_ecp5_and_diamond/ip/main_clocks/main_pll/main_pll.fdc"
 		suffix_name: edn
 		output_file_name: main_pll
 		write_prf: true

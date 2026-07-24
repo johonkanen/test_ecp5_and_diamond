@@ -2,6 +2,9 @@ library ieee;
     use ieee.std_logic_1164.all;
     use ieee.numeric_std.all;
 
+    library ecp5u;
+    use ecp5u.components.all;
+
 entity top is
     port(
 	    xclk : in std_logic;
@@ -57,7 +60,9 @@ architecture behavioral of top is
 
 	component main_pll
 		port (CLKI: in  std_logic; CLKOP: out  std_logic; 
-			CLKOS: out  std_logic);
+			CLKOS: out  std_logic;
+			CLKOS2: out  std_logic
+        );
 	end component;
 	
 	component mpy_32x32
@@ -69,6 +74,7 @@ architecture behavioral of top is
 		
 	signal clk120MHz : std_logic := '0';
 	signal clk240MHz : std_logic := '0';
+	signal clk5MHz : std_logic := '0';
 	
 	signal counter_120Mhz : natural := 0;
 	signal counter_240Mhz : natural := 60e6;
@@ -193,8 +199,21 @@ architecture behavioral of top is
     signal addsub_in  : instruction_in_ref'subtype  := instruction_in_ref;
     signal addsub_out : instruction_out_ref'subtype := instruction_out_ref;
     -- microprogram processor end
+	
+	-- use work.ads7056_pkg.all;
+	--    signal ad1 : ads7056_record := init_ads7056;
 
 begin
+
+
+    ddr_output_inst : ODDRX1F
+    port map (
+        SCLK => clk5MHz,
+        RST  => '0',
+        D0   => '0',
+        D1   => '0',
+        Q    => dhb_primary_high
+    );
 
     u_mproc : entity work.microprogram_controller
     generic map(g_program => test_program, g_data => test_program, g_idle_ram_write => ref_subtype.ram_write_in)
@@ -230,7 +249,9 @@ begin
 	u_main_clocks : main_pll
 	port map(CLKI => xclk
 	,CLKOP => clk120Mhz
-	,CLKOS => clk240Mhz);
+	,CLKOS => clk240Mhz
+    ,CLKOS2 => clk5MHz
+);
 	
     rgb_led1 <= (0 => led1_buffer(0) or pwm1, others => '1');
 	process(clk120Mhz) is
@@ -304,7 +325,7 @@ begin
         adb_mux   <= (others => '0');
 
         -- dhb io
-        dhb_primary_high  <= '0';
+        -- dhb_primary_high  <= '0';
         dhb_primary_low   <= '0';
         dhb_secondary_high  <= '0';
         dhb_secondary_low   <= '0';
@@ -366,6 +387,8 @@ begin
 				connect_data_to_address(bus_from_communications, bus_from_top, 7, test_data6);			
 				
 				init_ram(ram_a_in);
+                -- create_ads7056_driver(ad1,ada_data, ada_cs, ada_clock); 
+
 				
 				if read_is_requested(bus_from_communications) 
 					and get_address(bus_from_communications) >= 100
