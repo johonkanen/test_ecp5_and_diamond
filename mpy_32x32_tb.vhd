@@ -7,11 +7,11 @@ LIBRARY ieee  ;
 library vunit_lib;
 context vunit_lib.vunit_context;
 
-entity ecp5_fixed_dsp_tb is
+entity mpy_32x32_tb is
   generic (runner_cfg : string);
 end;
 
-architecture vunit_simulation of ecp5_fixed_dsp_tb is
+architecture vunit_simulation of mpy_32x32_tb is
 
     constant clock_period      : time    := 1 ns;
     constant simtime_in_clocks : integer := 15;

@@ -30,6 +30,7 @@ v2008.add_source_files(ROOT / MPROC / "source/hVHDL_floating_point/vhdl2008/alte
 v2008.add_source_files(ROOT / MPROC / "source/hVHDL_floating_point/vhdl2008/altera/sim_native_fp32.vhd")
 
 v2008.add_source_files(ROOT / MPROC / "vhdl2008/ram_connector_pkg.vhd")
+v2008.add_source_files(ROOT / MPROC / "vhdl2008/instruction_pkg.vhd")
 v2008.add_source_files(ROOT / MPROC / "vhdl2008/addsub.vhd")
 v2008.add_source_files(ROOT / MPROC / "vhdl2008/microprogram_sequencer.vhd")
 v2008.add_source_files(ROOT / MPROC / "vhdl2008/vhdl2008_microinstruction_pkg.vhd")
@@ -52,6 +53,7 @@ v2008.add_source_files(ROOT / MPROC / "testbenches/vhdl2008/float_microprocessor
 
 v2008.add_source_files(ROOT / "sim_mpy32x32.vhd")
 v2008.add_source_files(ROOT / "arch_ecp5_fixed_dsp.vhd")
+v2008.add_source_files(ROOT / "mpy_32x32_tb.vhd")
 v2008.add_source_files(ROOT / "ecp5_fixed_dsp_tb.vhd")
 
 
