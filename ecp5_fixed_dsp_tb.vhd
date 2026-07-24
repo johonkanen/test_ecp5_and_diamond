@@ -68,6 +68,7 @@ begin
             d <= to_fixed(0.0);
             c <= to_fixed(0.0);
             request_with_1 <= '0';
+            accumulate_with_1 <= '0';
             CASE simulation_counter is
                 WHEN 2 => 
                     a <= to_fixed(1.0);

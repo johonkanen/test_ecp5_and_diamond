@@ -50,11 +50,18 @@ v2008.add_source_files(ROOT / MPROC / "vhdl2008/arch_float_mult_add.vhd")
 v2008.add_source_files(ROOT / MPROC / "vhdl2008/arch_fixed_mult_add.vhd")
 v2008.add_source_files(ROOT / MPROC / "testbenches/vhdl2008/float_microprocessor_tb.vhd")
 
+v2008.add_source_files(ROOT / "source/fpga_communication/hVHDL_fpga_interconnect/fpga_interconnect_generic_pkg.vhd")
+v2008.add_source_files(ROOT / "source/fpga_communication/fpga_interconnect_16bit_pkg.vhd")
 
 v2008.add_source_files(ROOT / "sim_mpy32x32.vhd")
 v2008.add_source_files(ROOT / "arch_ecp5_fixed_dsp.vhd")
+v2008.add_source_files(ROOT / "test_processor.vhd")
+v2008.add_source_files(ROOT / "arch_processor.vhd")
+
 v2008.add_source_files(ROOT / "mpy_32x32_tb.vhd")
 v2008.add_source_files(ROOT / "ecp5_fixed_dsp_tb.vhd")
+
+v2008.add_source_files(ROOT / "ecp5_microprocessor_tb.vhd")
 
 
 if args.dump_arrays:
