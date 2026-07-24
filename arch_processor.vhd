@@ -186,7 +186,7 @@ begin
             variable retval : std_logic_vector(31 downto 0);
         begin
             for i in retval'range loop
-                retval(i) := data_in(31-i);
+                retval(i) := data_in(i);
             end loop;
 
             return retval;
@@ -219,7 +219,7 @@ begin
             ---------------------------
 
             start_counter <= start_counter + 1;
-            if start_counter > 1000
+            if start_counter > 100
             then
                 start_counter <= 0;
             end if;
@@ -251,7 +251,7 @@ begin
     ,instruction_in  => addsub_in
     ,instruction_out => addsub_out);
 ------------------------------------------------------------------------
-    u_fixed_mult_add : entity work.instruction(fixed_mult_add)
+    u_fixed_mult_add : entity work.instruction(ecp5_dsp)
     generic map(radix => g_used_radix)
     port map(clock 
     ,addsub_in

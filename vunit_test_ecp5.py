@@ -57,6 +57,7 @@ v2008.add_source_files(ROOT / "sim_mpy32x32.vhd")
 v2008.add_source_files(ROOT / "arch_ecp5_fixed_dsp.vhd")
 v2008.add_source_files(ROOT / "test_processor.vhd")
 v2008.add_source_files(ROOT / "arch_processor.vhd")
+v2008.add_source_files(ROOT / "arch_ecp_dsp_instruction.vhd")
 
 v2008.add_source_files(ROOT / "mpy_32x32_tb.vhd")
 v2008.add_source_files(ROOT / "ecp5_fixed_dsp_tb.vhd")
