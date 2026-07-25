@@ -59,10 +59,10 @@ v2008.add_source_files(ROOT / "test_processor.vhd")
 v2008.add_source_files(ROOT / "arch_processor.vhd")
 v2008.add_source_files(ROOT / "arch_ecp_dsp_instruction.vhd")
 
-v2008.add_source_files(ROOT / "mpy_32x32_tb.vhd")
-v2008.add_source_files(ROOT / "ecp5_fixed_dsp_tb.vhd")
+v2008.add_source_files(ROOT / "testbenches/mpy_32x32_tb.vhd")
+v2008.add_source_files(ROOT / "testbenches/ecp5_fixed_dsp_tb.vhd")
 
-v2008.add_source_files(ROOT / "ecp5_microprocessor_tb.vhd")
+v2008.add_source_files(ROOT / "testbenches/ecp5_microprocessor_tb.vhd")
 
 
 if args.dump_arrays:
