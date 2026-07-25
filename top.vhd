@@ -215,6 +215,7 @@ begin
         Q    => dhb_primary_high
     );
 
+------------------------------------------------------------------------
     u_mproc : entity work.microprogram_controller
     generic map(g_program => test_program, g_data => test_program, g_idle_ram_write => ref_subtype.ram_write_in)
     port map(
@@ -227,6 +228,13 @@ begin
             ,instruction_in  => addsub_in
             ,instruction_out => addsub_out
         );
+
+    -- u_fixed_mult_add : entity work.instruction(ecp5_dsp)
+    -- generic map(radix => g_used_radix)
+    -- port map(clock 
+    -- ,addsub_in
+    -- ,addsub_out);
+------------------------------------------------------------------------
 
     u_data_ram : entity work.multi_port_ram
     generic map(test_program)

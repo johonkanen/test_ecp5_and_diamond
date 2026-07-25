@@ -16,9 +16,9 @@
 --     );
 -- end entity uproc_test;
 
-architecture v3 of uproc_test is
+architecture v3 of uproc_test is 
 
-    use work.microprogram_processor_pkg.all;
+    use work.microprogram_processor_pkg.all; 
     use work.microinstruction_pkg.all;
     -- simulation specific signals ----
     constant instruction_length : natural := 32;
@@ -62,9 +62,6 @@ architecture v3 of uproc_test is
 
     ----
 
-    use work.float_to_real_conversions_pkg.all;
-    use work.float_typedefs_generic_pkg.all;
-
     constant load             : natural := 121;
     constant duty             : natural := 122;
     constant input_voltage    : natural := 123;
@@ -75,7 +72,7 @@ architecture v3 of uproc_test is
     constant current_gain     : natural := 26;
     constant voltage_gain     : natural := 27;
     constant inductor_voltage : natural := 29;
-    constant cap_current      : natural := 31;
+    constant cap_current      : natural := 31; 
 
     constant test1 : natural := 10;
     constant test2 : natural := 30;
@@ -83,7 +80,13 @@ architecture v3 of uproc_test is
 
     constant sampletime : real := 0.7e-6;
 
-    function to_fixed is new work.real_to_fixed_pkg.generic_to_fixed generic map(word_length => 32, used_radix => g_used_radix);
+    -- function to_fixed is new work.real_to_fixed_pkg.generic_to_fixed generic map(word_length => 32, used_radix => g_used_radix);
+    function to_fixed (a : real) return std_logic_vector is
+        variable retval : signed(31 downto 0);
+    begin
+        retval := work.real_to_fixed_pkg.to_fixed(a,32,20);
+        return std_logic_vector(retval);
+    end to_fixed;
 
     constant program_data : work.dual_port_ram_pkg.ram_array(0 to ref_subtype.address_high)(ref_subtype.data'range) := (
            0 => to_fixed(0.0)
@@ -180,20 +183,20 @@ begin
 
     process(clock) is
 
-        use work.ram_connector_pkg.generic_connect_ram_write_to_address;
-
-        impure function convert(data_in : std_logic_vector) return std_logic_vector is
-            variable retval : std_logic_vector(31 downto 0);
-        begin
-            for i in retval'range loop
-                retval(i) := data_in(i);
-            end loop;
-
-            return retval;
-        end convert;
-
-        procedure connect_ram_write_to_address is new generic_connect_ram_write_to_address 
-        generic map(return_type => std_logic_vector, conv => convert);
+        -- use work.ram_connector_pkg.connect_ram_write_to_address;
+        --
+        -- impure function convert(data_in : std_logic_vector) return std_logic_vector is
+        --     variable retval : std_logic_vector(31 downto 0);
+        -- begin
+        --     for i in retval'range loop
+        --         retval(i) := data_in(i);
+        --     end loop;
+        --
+        --     return retval;
+        -- end convert;
+        --
+        -- procedure connect_ram_write_to_address is new work.ram_connector_pkg.generic_connect_ram_write_to_address 
+        -- generic map(return_type => std_logic_vector, conv => convert);
 
     begin
         if rising_edge(clock)
@@ -230,11 +233,11 @@ begin
                 calculate(mproc_in, to_integer(signed(start_address)));
             end if;
 
-            connect_ram_write_to_address(mc_output , inductor_current , simcurrent);
-            connect_ram_write_to_address(mc_output , cap_voltage      , simvoltage);
-            connect_ram_write_to_address(mc_output , test1            , testdata);
-            connect_ram_write_to_address(mc_output , test2            , testdata2);
-            connect_ram_write_to_address(mc_output , test3            , testdata3);
+            -- connect_ram_write_to_address(mc_output , inductor_current , simcurrent);
+            -- connect_ram_write_to_address(mc_output , cap_voltage      , simvoltage);
+            -- connect_ram_write_to_address(mc_output , test1            , testdata);
+            -- connect_ram_write_to_address(mc_output , test2            , testdata2);
+            -- connect_ram_write_to_address(mc_output , test3            , testdata3);
 
 
         end if;
