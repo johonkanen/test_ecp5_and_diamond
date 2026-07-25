@@ -80,6 +80,7 @@ architecture v3 of uproc_test is
 
     constant sampletime : real := 0.7e-6;
 
+    -- diamond does not work with generic subprograms
     -- function to_fixed is new work.real_to_fixed_pkg.generic_to_fixed generic map(word_length => 32, used_radix => g_used_radix);
     function to_fixed (a : real) return std_logic_vector is
         variable retval : signed(31 downto 0);
@@ -198,6 +199,18 @@ begin
         -- procedure connect_ram_write_to_address is new work.ram_connector_pkg.generic_connect_ram_write_to_address 
         -- generic map(return_type => std_logic_vector, conv => convert);
 
+        procedure connect_ram_write_to_address
+        (
+            write_in : in ram_write_in_record
+            ; address : in natural
+            ; signal data : out std_logic_vector
+        ) is
+        begin
+            if write_requested(write_in,address) then
+                data <= get_data(write_in);
+            end if;
+        end connect_ram_write_to_address;
+
     begin
         if rising_edge(clock)
         then
@@ -233,11 +246,11 @@ begin
                 calculate(mproc_in, to_integer(signed(start_address)));
             end if;
 
-            -- connect_ram_write_to_address(mc_output , inductor_current , simcurrent);
-            -- connect_ram_write_to_address(mc_output , cap_voltage      , simvoltage);
-            -- connect_ram_write_to_address(mc_output , test1            , testdata);
-            -- connect_ram_write_to_address(mc_output , test2            , testdata2);
-            -- connect_ram_write_to_address(mc_output , test3            , testdata3);
+            connect_ram_write_to_address(mc_output , inductor_current , simcurrent);
+            connect_ram_write_to_address(mc_output , cap_voltage      , simvoltage);
+            connect_ram_write_to_address(mc_output , test1            , testdata);
+            connect_ram_write_to_address(mc_output , test2            , testdata2);
+            connect_ram_write_to_address(mc_output , test3            , testdata3);
 
 
         end if;

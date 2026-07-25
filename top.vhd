@@ -83,10 +83,12 @@ architecture behavioral of top is
 	
 	signal led2_buffer : rgb_led2'subtype := (others => '0');
 	
-	signal bus_from_top : work.fpga_interconnect_pkg.fpga_interconnect_record;
 	signal bus_to_communications : work.fpga_interconnect_pkg.fpga_interconnect_record;
 	signal bus_from_communications : work.fpga_interconnect_pkg.fpga_interconnect_record;
 	
+	signal bus_from_top : work.fpga_interconnect_pkg.fpga_interconnect_record;
+	signal bus_from_uproc : work.fpga_interconnect_pkg.fpga_interconnect_record;
+
 	signal test_data1 : std_logic_vector(31 downto 0) := x"0000acdc";
 	signal test_data2 : std_logic_vector(31 downto 0) := (20 => '1', others => '0');
 	
@@ -216,43 +218,49 @@ begin
     );
 
 ------------------------------------------------------------------------
-    u_mproc : entity work.microprogram_controller
-    generic map(g_program => test_program, g_data => test_program, g_idle_ram_write => ref_subtype.ram_write_in)
-    port map(
-            clock => clk120Mhz
-
-            ,mproc_in        => mproc_in
-            ,mproc_out       => mproc_out
-            ,mc_output       => mc_output
-            ,mc_write_in     => mc_write_in
-            ,instruction_in  => addsub_in
-            ,instruction_out => addsub_out
-        );
-
-    -- u_fixed_mult_add : entity work.instruction(ecp5_dsp)
-    -- generic map(radix => g_used_radix)
-    -- port map(clock 
-    -- ,addsub_in
-    -- ,addsub_out);
-------------------------------------------------------------------------
-
-    u_data_ram : entity work.multi_port_ram
-    generic map(test_program)
-    port map(
-        clock => clk120Mhz
-        ,ram_read_in  => ram_read_in
-        ,ram_read_out => ram_read_out
-        ,ram_write_in => ram_write_in);
-
-    u_dpram : entity work.dual_port_ram
-    generic map(dp_ram_subtype, init_values)
-    port map(
-    clk120Mhz  ,
-    ram_a_in   ,
-    ram_a_out  ,
-    --------------
-    ram_b_in  ,
-    ram_b_out);
+    u_mproc : entity work.uproc_test
+    generic map(g_word_length => 32)
+    port map(clock => clk120Mhz
+    ,bus_from_communications => bus_from_communications
+    ,bus_from_uproc => bus_from_uproc
+    );
+--     u_mproc : entity work.microprogram_controller
+--     generic map(g_program => test_program, g_data => test_program, g_idle_ram_write => ref_subtype.ram_write_in)
+--     port map(
+--             clock => clk120Mhz
+--
+--             ,mproc_in        => mproc_in
+--             ,mproc_out       => mproc_out
+--             ,mc_output       => mc_output
+--             ,mc_write_in     => mc_write_in
+--             ,instruction_in  => addsub_in
+--             ,instruction_out => addsub_out
+--         );
+--
+--     u_fixed_mult_add : entity work.instruction(ecp5_dsp)
+--     generic map(radix => 20)
+--     port map(clk120Mhz 
+--     ,addsub_in
+--     ,addsub_out);
+-- ------------------------------------------------------------------------
+--
+--     u_data_ram : entity work.multi_port_ram
+--     generic map(test_program)
+--     port map(
+--         clock => clk120Mhz
+--         ,ram_read_in  => ram_read_in
+--         ,ram_read_out => ram_read_out
+--         ,ram_write_in => ram_write_in);
+--
+--     u_dpram : entity work.dual_port_ram
+--     generic map(dp_ram_subtype, init_values)
+--     port map(
+--     clk120Mhz  ,
+--     ram_a_in   ,
+--     ram_a_out  ,
+--     --------------
+--     ram_b_in  ,
+--     ram_b_out);
 
 	u_main_clocks : main_pll
 	port map(CLKI => xclk
@@ -376,14 +384,20 @@ begin
 			,bus_from_communications => bus_from_communications
 		);
 
-		
+        process(clk120Mhz)
+			use work.fpga_interconnect_pkg.all;
+        begin
+            if rising_edge(clk120Mhz) then
+                bus_to_communications <= bus_from_top
+                                         and bus_from_uproc;
+            end if;
+        end process;
 		
 		test_uart : process(clk120Mhz)
 			use work.fpga_interconnect_pkg.all;
 			variable data : std_logic_vector(31 downto 0);
 		begin
 			if rising_edge(clk120Mhz) then	
-				bus_to_communications <= bus_from_top;
 			
 				init_bus(bus_from_top);
 				connect_read_only_data_to_address(bus_from_communications, bus_from_top, 1, std_logic_vector(resize(shift_right(signed(res),20),32)));

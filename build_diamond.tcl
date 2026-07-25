@@ -79,10 +79,11 @@ add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/v
 add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/vhdl2008/fixed_dsp.vhd
 add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/vhdl2008/arch_rtl_fixed_dsp.vhd
 
+add_vhdl_file_to_project $path_to_this_file/ecp5_real_to_fixed_pkg.vhd
 add_vhdl_file_to_project $path_to_this_file/arch_ecp5_fixed_dsp.vhd
 add_vhdl_file_to_project $path_to_this_file/arch_ecp_dsp_instruction.vhd
 add_vhdl_file_to_project $path_to_this_file/test_processor.vhd
-add_vhdl_file_to_project $path_to_this_file/ecp5_real_to_fixed_pkg.vhd
+add_vhdl_file_to_project $path_to_this_file/arch_processor.vhd
 # end microprogram processor modules
 
 add_vhdl_file_to_project $path_to_this_file/top.vhd
