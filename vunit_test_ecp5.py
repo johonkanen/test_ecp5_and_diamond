@@ -64,6 +64,9 @@ v2008.add_source_files(ROOT / "testbenches/ecp5_fixed_dsp_tb.vhd")
 
 v2008.add_source_files(ROOT / "testbenches/ecp5_microprocessor_tb.vhd")
 
+v2008.add_source_files(ROOT / "spi3w_ads7056_driver.vhd")
+v2008.add_source_files(ROOT / "testbenches/ads7056_entity_tb.vhd")
+
 
 if args.dump_arrays:
     VU.set_sim_option("nvc.sim_flags", ["-w", "--dump-arrays"])
