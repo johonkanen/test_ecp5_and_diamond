@@ -115,7 +115,7 @@ architecture behavioral of top is
 
     signal pwm_counter2 : natural range 0 to 2**15-1;
     signal pwm2 : std_logic := '0';
-	
+
 	-----------------------------
 	-----------------------------
 	use work.dual_port_ram_pkg.all;
@@ -205,7 +205,40 @@ architecture behavioral of top is
 	-- use work.ads7056_pkg.all;
 	--    signal ad1 : ads7056_record := init_ads7056;
 
+
+    signal ada_conversion : std_logic_vector(15 downto 0);
+    signal start_ada_conversion : std_logic := '0';
+    signal conversion_counter : natural := 0;
+    signal adb_conversion : std_logic_vector(15 downto 0);
+
 begin
+
+    ada : entity work.spi3w_ads7056_driver
+        generic map(2,18,9)
+        port map(
+                clk120MHz, 
+                '1',
+                ada_cs,
+                ada_clock,
+                ada_data, 
+                start_ada_conversion,
+                open,
+                open,
+                open,
+                ada_conversion);
+    adb : entity work.spi3w_ads7056_driver
+        generic map(2,18,9)
+        port map(
+                clk120MHz, 
+                '1',
+                adb_cs,
+                adb_clock,
+                adb_data, 
+                start_ada_conversion,
+                open,
+                open,
+                open,
+                adb_conversion);
 
 
     ddr_output_inst : ODDRX1F
@@ -224,43 +257,6 @@ begin
     ,bus_from_communications => bus_from_communications
     ,bus_from_uproc => bus_from_uproc
     );
---     u_mproc : entity work.microprogram_controller
---     generic map(g_program => test_program, g_data => test_program, g_idle_ram_write => ref_subtype.ram_write_in)
---     port map(
---             clock => clk120Mhz
---
---             ,mproc_in        => mproc_in
---             ,mproc_out       => mproc_out
---             ,mc_output       => mc_output
---             ,mc_write_in     => mc_write_in
---             ,instruction_in  => addsub_in
---             ,instruction_out => addsub_out
---         );
---
---     u_fixed_mult_add : entity work.instruction(ecp5_dsp)
---     generic map(radix => 20)
---     port map(clk120Mhz 
---     ,addsub_in
---     ,addsub_out);
--- ------------------------------------------------------------------------
---
---     u_data_ram : entity work.multi_port_ram
---     generic map(test_program)
---     port map(
---         clock => clk120Mhz
---         ,ram_read_in  => ram_read_in
---         ,ram_read_out => ram_read_out
---         ,ram_write_in => ram_write_in);
---
---     u_dpram : entity work.dual_port_ram
---     generic map(dp_ram_subtype, init_values)
---     port map(
---     clk120Mhz  ,
---     ram_a_in   ,
---     ram_a_out  ,
---     --------------
---     ram_b_in  ,
---     ram_b_out);
 
 	u_main_clocks : main_pll
 	port map(CLKI => xclk
@@ -331,14 +327,14 @@ begin
 
         -- onboard adc io
         --ada_data  : in std_logic;
-        ada_clock  <= '0';
-        ada_cs     <= '0';
-        ada_mux   <= (others => '0');
+        -- ada_clock  <= '0';
+        -- ada_cs     <= '0';
+        ada_mux   <= "011";
 
         --adb_data  : in std_logic;
-        adb_clock  <= '0';
-        adb_cs     <= '0';
-        adb_mux   <= (others => '0');
+        -- adb_clock  <= '0';
+        -- adb_cs     <= '0';
+        adb_mux   <= "011";
 
         -- dhb io
         -- dhb_primary_high  <= '0';
@@ -407,9 +403,22 @@ begin
 				connect_data_to_address(bus_from_communications, bus_from_top, 5, test_data4);			
 				connect_data_to_address(bus_from_communications, bus_from_top, 6, test_data5);			
 				connect_data_to_address(bus_from_communications, bus_from_top, 7, test_data6);			
+				connect_read_only_data_to_address(bus_from_communications, bus_from_top, 8, ada_conversion);			
+				connect_read_only_data_to_address(bus_from_communications, bus_from_top, 9, adb_conversion);			
 				
 				init_ram(ram_a_in);
                 -- create_ads7056_driver(ad1,ada_data, ada_cs, ada_clock); 
+
+                conversion_counter <= conversion_counter + 1;
+                if conversion_counter >= 1000 then
+                    conversion_counter <= 0;
+                end if;
+
+                if conversion_counter = 0 then
+                    start_ada_conversion <= '1';
+                else
+                    start_ada_conversion <= '0';
+                end if;
 
 				
 				if read_is_requested(bus_from_communications) 
@@ -424,10 +433,10 @@ begin
 				end if;
 				
 				if write_from_bus_is_requested(bus_from_communications)
-					and get_address(bus_from_communications) >= 100
-					and get_address(bus_from_communications) <= 611
+					and get_address(bus_from_communications) >= 1000
+					and get_address(bus_from_communications) <= 1611
 				then
-					write_data_to_ram(ram_b_in, get_address(bus_from_communications) - 100, get_slv_data(bus_from_communications));
+					write_data_to_ram(ram_b_in, get_address(bus_from_communications) - 1000, get_slv_data(bus_from_communications));
 				end if;
 			
 			end if;
