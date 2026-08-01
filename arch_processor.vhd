@@ -203,7 +203,7 @@ begin
         (
             write_in : in ram_write_in_record
             ; address : in natural
-            ; signal data : out std_logic_vector
+            ; signal data : out std_logic_vector(31 downto 0)
         ) is
         begin
             if write_requested(write_in,address) then
@@ -217,14 +217,14 @@ begin
             init_mproc(mproc_in);
             init_mp_write(mc_write_in);
             init_bus(bus_from_uproc);
-            connect_data_to_address(bus_from_communications, bus_from_uproc, 398, start_address);
-            connect_data_to_address(bus_from_communications, bus_from_uproc, 399, enable_calculation);
+            connect_data_to_address(bus_from_communications, bus_from_uproc, 1000, start_address);
+            connect_data_to_address(bus_from_communications, bus_from_uproc, 1001, enable_calculation);
 
-            connect_read_only_data_to_address(bus_from_communications, bus_from_uproc, 500, simcurrent);
-            connect_read_only_data_to_address(bus_from_communications, bus_from_uproc, 501, simvoltage);
-            connect_read_only_data_to_address(bus_from_communications, bus_from_uproc, 502, testdata);
-            connect_read_only_data_to_address(bus_from_communications, bus_from_uproc, 503, testdata2);
-            connect_read_only_data_to_address(bus_from_communications, bus_from_uproc, 504, testdata3);
+            connect_read_only_data_to_address(bus_from_communications, bus_from_uproc, 1002, simcurrent);
+            connect_read_only_data_to_address(bus_from_communications, bus_from_uproc, 1003, simvoltage);
+            connect_read_only_data_to_address(bus_from_communications, bus_from_uproc, 1004, testdata);
+            connect_read_only_data_to_address(bus_from_communications, bus_from_uproc, 1005, testdata2);
+            connect_read_only_data_to_address(bus_from_communications, bus_from_uproc, 1006, testdata3);
 
             if write_is_requested_to_address_range(bus_from_communications, 2000, 2127)
             then

@@ -206,10 +206,13 @@ architecture behavioral of top is
 	--    signal ad1 : ads7056_record := init_ads7056;
 
 
-    signal ada_conversion : std_logic_vector(15 downto 0);
+    signal ada_conversion       : std_logic_vector(15 downto 0);
     signal start_ada_conversion : std_logic := '0';
-    signal conversion_counter : natural := 0;
-    signal adb_conversion : std_logic_vector(15 downto 0);
+    signal conversion_counter   : natural   := 0;
+    signal adb_conversion       : std_logic_vector(15 downto 0);
+
+    signal llc_ad_conversion : std_logic_vector(15 downto 0);
+    signal dhb_ad_conversion : std_logic_vector(15 downto 0);
 
 begin
 
@@ -226,6 +229,7 @@ begin
                 open,
                 open,
                 ada_conversion);
+
     adb : entity work.spi3w_ads7056_driver
         generic map(2,18,9)
         port map(
@@ -240,6 +244,33 @@ begin
                 open,
                 adb_conversion);
 
+    ads120s101_a : entity work.spi3w_ads7056_driver
+        generic map(6,16,9)
+        port map(
+                clk120MHz, 
+                '1',
+                llc_ad_cs,
+                llc_ad_clock,
+                llc_ad_data, 
+                start_ada_conversion,
+                open,
+                open,
+                open,
+                llc_ad_conversion);
+
+    ads120s101_b : entity work.spi3w_ads7056_driver
+        generic map(6,16,9)
+        port map(
+                clk120MHz, 
+                '1',
+                dhb_ad_cs,
+                dhb_ad_clock,
+                dhb_ad_data, 
+                start_ada_conversion,
+                open,
+                open,
+                open,
+                dhb_ad_conversion);
 
     ddr_output_inst : ODDRX1F
     port map (
@@ -255,7 +286,7 @@ begin
     generic map(g_word_length => 32)
     port map(clock => clk120Mhz
     ,bus_from_communications => bus_from_communications
-    ,bus_from_uproc => bus_from_uproc
+    ,bus_from_uproc          => bus_from_uproc
     );
 
 	u_main_clocks : main_pll
@@ -322,9 +353,6 @@ begin
 		end if;
 	end process;
 
-        --pi_uart_rx_serial : in std_logic;
-        --po_uart_tx_serial  <= '0';
-
         -- onboard adc io
         --ada_data  : in std_logic;
         -- ada_clock  <= '0';
@@ -343,8 +371,8 @@ begin
         dhb_secondary_low   <= '0';
 
         --dhb_ad_data  : in std_logic;
-        dhb_ad_clock  <= '0';
-        dhb_ad_cs     <= '0';
+        -- dhb_ad_clock  <= '0';
+        -- dhb_ad_cs     <= '0';
 
         -- llc io
         pri_high  <= '0';
@@ -353,8 +381,8 @@ begin
         sync2     <= '0';
 
         --llc_ad_data  : in std_logic;
-        llc_ad_clock  <= '0';
-        llc_ad_cs     <= '0';
+        -- llc_ad_clock  <= '0';
+        -- llc_ad_cs     <= '0';
 
         -- pfc io
         ac1_switch <= '0';
@@ -374,9 +402,9 @@ begin
 				)
 		port map(
 			clock => clk120Mhz
-			,uart_rx => pi_uart_rx_serial
-			,uart_tx => po_uart_tx_serial
-			,bus_to_communications => bus_to_communications
+			,uart_rx                 => pi_uart_rx_serial
+			,uart_tx                 => po_uart_tx_serial
+			,bus_to_communications   => bus_to_communications
 			,bus_from_communications => bus_from_communications
 		);
 
@@ -396,15 +424,17 @@ begin
 			if rising_edge(clk120Mhz) then	
 			
 				init_bus(bus_from_top);
-				connect_read_only_data_to_address(bus_from_communications, bus_from_top, 1, std_logic_vector(resize(shift_right(signed(res),20),32)));
-				connect_data_to_address(bus_from_communications, bus_from_top, 2, test_data1);		
-				connect_data_to_address(bus_from_communications, bus_from_top, 3, test_data2);		
-				connect_data_to_address(bus_from_communications, bus_from_top, 4, test_data3);			
-				connect_data_to_address(bus_from_communications, bus_from_top, 5, test_data4);			
-				connect_data_to_address(bus_from_communications, bus_from_top, 6, test_data5);			
-				connect_data_to_address(bus_from_communications, bus_from_top, 7, test_data6);			
-				connect_read_only_data_to_address(bus_from_communications, bus_from_top, 8, ada_conversion);			
-				connect_read_only_data_to_address(bus_from_communications, bus_from_top, 9, adb_conversion);			
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , 1 , std_logic_vector(resize(shift_right(signed(res) , 20) , 32)));
+				connect_data_to_address(bus_from_communications           , bus_from_top , 2 , test_data1);
+				connect_data_to_address(bus_from_communications           , bus_from_top , 3 , test_data2);
+				connect_data_to_address(bus_from_communications           , bus_from_top , 4 , test_data3);
+				connect_data_to_address(bus_from_communications           , bus_from_top , 5 , test_data4);
+				connect_data_to_address(bus_from_communications           , bus_from_top , 6 , test_data5);
+				connect_data_to_address(bus_from_communications           , bus_from_top , 7 , test_data6);
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , 8 , ada_conversion);
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , 9 , adb_conversion);
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , 10 , llc_ad_conversion);
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , 11 , dhb_ad_conversion);
 				
 				init_ram(ram_a_in);
                 -- create_ads7056_driver(ad1,ada_data, ada_cs, ada_clock); 

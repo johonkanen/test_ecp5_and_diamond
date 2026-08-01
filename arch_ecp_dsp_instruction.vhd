@@ -108,7 +108,7 @@ begin
 
                 WHEN neg_mpy_sub =>
                     accumulate    <= '0';
-                    pre_subtract  <= '0';
+                    pre_subtract  <= '1';
                     post_subtract <= '1';
                     invert_result <= '0';
                     request_calculation <= '1';
