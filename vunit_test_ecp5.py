@@ -54,7 +54,6 @@ v2008.add_source_files(ROOT / "source/fpga_communication/hVHDL_fpga_interconnect
 v2008.add_source_files(ROOT / "source/fpga_communication/fpga_interconnect_16bit_pkg.vhd")
 
 v2008.add_source_files(ROOT / "sim_mpy32x32.vhd")
-v2008.add_source_files(ROOT / "arch_ecp5_fixed_dsp.vhd")
 v2008.add_source_files(ROOT / "test_processor.vhd")
 v2008.add_source_files(ROOT / "arch_processor.vhd")
 v2008.add_source_files(ROOT / "arch_ecp_dsp_instruction.vhd")

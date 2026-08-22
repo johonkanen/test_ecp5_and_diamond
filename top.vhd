@@ -213,6 +213,25 @@ architecture behavioral of top is
 
     signal llc_ad_conversion : std_logic_vector(15 downto 0);
     signal dhb_ad_conversion : std_logic_vector(15 downto 0);
+	
+	--constant zero : 
+
+    constant init_dsp_in : work.fixed_dsp_pkg.fixed_dsp_in_record :=(
+        a => (31 downto 0 => '0')
+        ,b => (31 downto 0 => '0')
+        ,c => (31 downto 0 => '0')
+        ,d => (31 downto 0 => '0')
+        ,request_with_1          => '0'
+        ,accumulate_with_1       => '0'
+        ,pre_subtract_with_1     => '0'
+        ,post_subtract_with_1    => '0'
+        ,invert_result_with_1    => '0'
+        ,reset_accumulator_with_1=> '0'
+
+    );
+    signal fixed_dsp_in : work.fixed_dsp_pkg.fixed_dsp_in_record := init_dsp_in;
+
+
 
 begin
 
@@ -471,27 +490,29 @@ begin
 			
 			end if;
 		end process;
+/*
+            fixed_dsp_in.a <= signed(test_data1);
+            fixed_dsp_in.d <= signed(test_data3);
+            fixed_dsp_in.b <= signed(test_data2);
+            fixed_dsp_in.c <= signed(test_data4);
 
-        u_ecp5_fixed_dsp : entity work.ecp5_fixed_dsp
+            fixed_dsp_in.request_with_1       <= '1';
+            fixed_dsp_in.accumulate_with_1    <= '0';
+            fixed_dsp_in.pre_subtract_with_1  <= '0';
+            fixed_dsp_in.post_subtract_with_1 <= '0';
+            fixed_dsp_in.invert_result_with_1 <= '0';
+            fixed_dsp_in.reset_accumulator_with_1 <= '0';
+
+        u_ecp5_fixed_dsp : entity work.fixed_dsp
         generic map(g_radix => 20)
         port map(
             clock => clk120Mhz
-            ,fixed_dsp_in.a => signed(test_data1)
-            ,fixed_dsp_in.d => signed(test_data3)
-            ,fixed_dsp_in.b => signed(test_data2)
-            ,fixed_dsp_in.c => signed(test_data4)
-
-            ,fixed_dsp_in.request_with_1       => '1'
-            ,fixed_dsp_in.accumulate_with_1    => '0'
-            ,fixed_dsp_in.pre_subtract_with_1  => '0'
-            ,fixed_dsp_in.post_subtract_with_1 => '0'
-            ,fixed_dsp_in.invert_result_with_1 => '0'
-            ,fixed_dsp_in.reset_accumulator_with_1 => '0'
+            ,fixed_dsp_in => fixed_dsp_in
 
             ,ready_with_1 => open
             ,result       => res
         );
-
+*/
 		-- directly instantiating configured ip works
 		-- works
 		-- u_mpy : mpy_32x32

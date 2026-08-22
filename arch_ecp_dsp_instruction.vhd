@@ -22,7 +22,7 @@ architecture ecp5_dsp of instruction is
 
 begin
 
-    u_ecp5_fixed_dsp : entity work.ecp5_fixed_dsp
+    u_ecp5_fixed_dsp : entity work.fixed_dsp
     generic map(g_radix => g_radix)
     port map(
         clock => clock
