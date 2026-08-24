@@ -71,7 +71,7 @@ add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/v
 add_vhdl_file_to_project $path_to_this_file/microinstruction_pkg.vhd
 
 
-add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/source/hVHDL_fixed_point/fixed_dsp/ecp5_fixed_dsp.vhd
+add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/source/hVHDL_fixed_point/fixed_dsp/fixed_dsp.vhd
 add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/source/hVHDL_fixed_point/fixed_dsp/arch_ecp5_fixed_dsp.vhd
 
 add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/vhdl2008/microprogram_processor_pkg.vhd

@@ -1,5 +1,7 @@
 architecture ecp5_dsp of instruction is
 
+    use work.fixed_dsp_pkg.all;
+
     constant g_radix : natural := radix;
 
     constant datawidth : natural := instruction_in.data_read_out(instruction_in.data_read_out'left).data'length;
@@ -20,27 +22,41 @@ architecture ecp5_dsp of instruction is
 
     signal ready_with_1 : std_logic;
 
+    -- bound to the fixed_dsp ports as whole objects rather than
+    -- field-by-field : Diamond can fail to resolve a composite port's
+    -- subtype when it is associated one field at a time instead of as a
+    -- single constrained object (see the memory library ram_in/out_record
+    -- ports, which are always associated whole)
+    constant init_input : fixed_dsp_in_record := init_fixed_dsp_in;
+    signal fixed_dsp_in  : init_input'subtype := init_input;
+
+    constant zero_res : signed(63 downto 0) := (others => '0');
+    signal fixed_dsp_out : fixed_dsp_out_record(result(63 downto 0)) := (ready_with_1 => '0', result => zero_res);
+
 begin
 
     u_ecp5_fixed_dsp : entity work.fixed_dsp
     generic map(g_radix => g_radix)
     port map(
         clock => clock
-        ,fixed_dsp_in.a => a
-        ,fixed_dsp_in.d => d
-        ,fixed_dsp_in.b => b
-        ,fixed_dsp_in.c => c
-
-        ,fixed_dsp_in.request_with_1       => request_calculation
-        ,fixed_dsp_in.accumulate_with_1    => accumulate
-        ,fixed_dsp_in.pre_subtract_with_1  => pre_subtract
-        ,fixed_dsp_in.post_subtract_with_1 => post_subtract
-        ,fixed_dsp_in.invert_result_with_1 => invert_result
-        ,fixed_dsp_in.reset_accumulator_with_1 => reset_accumulator
-
-        ,fixed_dsp_out.ready_with_1 => ready_with_1
-        ,fixed_dsp_out.result       => dsp_result
+        ,fixed_dsp_in  => fixed_dsp_in
+        ,fixed_dsp_out => fixed_dsp_out
     );
+
+    fixed_dsp_in.a <= a;
+    fixed_dsp_in.d <= d;
+    fixed_dsp_in.b <= b;
+    fixed_dsp_in.c <= c;
+
+    fixed_dsp_in.request_with_1           <= request_calculation;
+    fixed_dsp_in.accumulate_with_1         <= accumulate;
+    fixed_dsp_in.pre_subtract_with_1       <= pre_subtract;
+    fixed_dsp_in.post_subtract_with_1      <= post_subtract;
+    fixed_dsp_in.invert_result_with_1      <= invert_result;
+    fixed_dsp_in.reset_accumulator_with_1  <= reset_accumulator;
+
+    dsp_result   <= fixed_dsp_out.result;
+    ready_with_1 <= fixed_dsp_out.ready_with_1;
 
     mpy_add_sub : process(clock) is
     begin
