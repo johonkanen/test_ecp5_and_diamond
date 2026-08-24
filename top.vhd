@@ -216,20 +216,20 @@ architecture behavioral of top is
 	
 	--constant zero : 
 
-    constant init_dsp_in : work.fixed_dsp_pkg.fixed_dsp_in_record :=(
-        a => (31 downto 0 => '0')
-        ,b => (31 downto 0 => '0')
-        ,c => (31 downto 0 => '0')
-        ,d => (31 downto 0 => '0')
-        ,request_with_1          => '0'
-        ,accumulate_with_1       => '0'
-        ,pre_subtract_with_1     => '0'
-        ,post_subtract_with_1    => '0'
-        ,invert_result_with_1    => '0'
-        ,reset_accumulator_with_1=> '0'
-
-    );
-    signal fixed_dsp_in : work.fixed_dsp_pkg.fixed_dsp_in_record := init_dsp_in;
+    -- constant init_dsp_in : work.fixed_dsp_pkg.fixed_dsp_in_record :=(
+    --     a => (31 downto 0 => '0')
+    --     ,b => (31 downto 0 => '0')
+    --     ,c => (31 downto 0 => '0')
+    --     ,d => (31 downto 0 => '0')
+    --     ,request_with_1          => '0'
+    --     ,accumulate_with_1       => '0'
+    --     ,pre_subtract_with_1     => '0'
+    --     ,post_subtract_with_1    => '0'
+    --     ,invert_result_with_1    => '0'
+    --     ,reset_accumulator_with_1=> '0'
+    --
+    -- );
+    -- signal fixed_dsp_in : work.fixed_dsp_pkg.fixed_dsp_in_record := init_dsp_in;
 
 
 
