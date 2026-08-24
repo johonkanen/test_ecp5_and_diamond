@@ -40,8 +40,8 @@ v2008.add_source_files(ROOT / MPROC / "vhdl2008/microprogram_processor_pkg.vhd")
 v2008.add_source_files(ROOT / MPROC / "vhdl2008/microprogram_processor.vhd")
 v2008.add_source_files(ROOT / MPROC / "vhdl2008/microprogram_controller.vhd")
 
-v2008.add_source_files(ROOT / MPROC / "vhdl2008/fixed_dsp.vhd")
-v2008.add_source_files(ROOT / MPROC / "vhdl2008/arch_rtl_fixed_dsp.vhd")
+v2008.add_source_files(ROOT / MPROC / "source/hVHDL_fixed_point/fixed_dsp/fixed_dsp.vhd")
+v2008.add_source_files(ROOT / MPROC / "source/hVHDL_fixed_point/fixed_dsp/arch_rtl_fixed_dsp.vhd")
 
 v2008.add_source_files(ROOT / MPROC / "testbenches/vhdl2008/microprogram_sequencer_tb.vhd")
 v2008.add_source_files(ROOT / MPROC / "testbenches/vhdl2008/retry_microprogram_processor_tb.vhd")
@@ -59,7 +59,10 @@ v2008.add_source_files(ROOT / "arch_processor.vhd")
 v2008.add_source_files(ROOT / "arch_ecp_dsp_instruction.vhd")
 
 v2008.add_source_files(ROOT / "testbenches/mpy_32x32_tb.vhd")
-v2008.add_source_files(ROOT / "testbenches/ecp5_fixed_dsp_tb.vhd")
+# fixed_dsp's own testbench (both the rtl and ecp5 architectures) now lives
+# with the relocated source at source/hVHDL_microprogam_processor/source/
+# hVHDL_fixed_point/testbenches/fixed_dsp/fixed_dsp_tb.vhd, run via that
+# submodule's own vunit_run.py
 
 v2008.add_source_files(ROOT / "testbenches/ecp5_microprocessor_tb.vhd")
 

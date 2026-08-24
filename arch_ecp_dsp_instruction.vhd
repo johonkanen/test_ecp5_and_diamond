@@ -38,8 +38,8 @@ begin
         ,fixed_dsp_in.invert_result_with_1 => invert_result
         ,fixed_dsp_in.reset_accumulator_with_1 => reset_accumulator
 
-        ,ready_with_1 => ready_with_1
-        ,result       => dsp_result
+        ,fixed_dsp_out.ready_with_1 => ready_with_1
+        ,fixed_dsp_out.result       => dsp_result
     );
 
     mpy_add_sub : process(clock) is
