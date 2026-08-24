@@ -230,8 +230,16 @@ architecture behavioral of top is
     --
     -- );
     -- signal fixed_dsp_in : work.fixed_dsp_pkg.fixed_dsp_in_record := init_dsp_in;
+    use work.fixed_dsp_pkg.all;
+    constant init_input : fixed_dsp_in_record := init_fixed_dsp_in;
+    signal fixed_dsp_in  : init_input'subtype := init_input;
 
+    -- constant zero_res : signed(63 downto 0) := (others => '0');
+    signal fixed_dsp_out : fixed_dsp_out_record(result(63 downto 0)) := (
+    ready_with_1 => '0'
+    , result     => (others => '0'));
 
+    signal ready_with_1 : std_logic;
 
 begin
 
@@ -385,9 +393,10 @@ begin
 
         -- dhb io
         -- dhb_primary_high  <= '0';
-        dhb_primary_low   <= '0';
-        dhb_secondary_high  <= '0';
-        dhb_secondary_low   <= '0';
+
+        dhb_primary_low    <= '0';
+        dhb_secondary_high <= '0';
+        dhb_secondary_low  <= '0';
 
         --dhb_ad_data  : in std_logic;
         -- dhb_ad_clock  <= '0';
@@ -490,148 +499,29 @@ begin
 			
 			end if;
 		end process;
-/*
-            fixed_dsp_in.a <= signed(test_data1);
-            fixed_dsp_in.d <= signed(test_data3);
-            fixed_dsp_in.b <= signed(test_data2);
-            fixed_dsp_in.c <= signed(test_data4);
 
-            fixed_dsp_in.request_with_1       <= '1';
-            fixed_dsp_in.accumulate_with_1    <= '0';
-            fixed_dsp_in.pre_subtract_with_1  <= '0';
-            fixed_dsp_in.post_subtract_with_1 <= '0';
-            fixed_dsp_in.invert_result_with_1 <= '0';
-            fixed_dsp_in.reset_accumulator_with_1 <= '0';
+        fixed_dsp_in.a <= signed(test_data1);
+        fixed_dsp_in.d <= signed(test_data3);
+        fixed_dsp_in.b <= signed(test_data2);
+        fixed_dsp_in.c <= signed(test_data4);
+
+        fixed_dsp_in.request_with_1           <= '1';
+        fixed_dsp_in.accumulate_with_1        <= '0';
+        fixed_dsp_in.pre_subtract_with_1      <= '0';
+        fixed_dsp_in.post_subtract_with_1     <= '0';
+        fixed_dsp_in.invert_result_with_1     <= '0';
+        fixed_dsp_in.reset_accumulator_with_1 <= '0';
+
+        fixed_dsp_out.ready_with_1 <= ready_with_1;
+        fixed_dsp_out.result <= res;
 
         u_ecp5_fixed_dsp : entity work.fixed_dsp
         generic map(g_radix => 20)
         port map(
             clock => clk120Mhz
-            ,fixed_dsp_in => fixed_dsp_in
-
-            ,ready_with_1 => open
-            ,result       => res
+            ,fixed_dsp_in  => fixed_dsp_in
+            ,fixed_dsp_out => fixed_dsp_out
         );
-*/
-		-- directly instantiating configured ip works
-		-- works
-		-- u_mpy : mpy_32x32
-		-- port map(
-		-- 	Clock   => clk120Mhz
-		-- 	,ClkEn  => '1'
-		-- 	,Aclr   => '0'
-		-- 	,DataA  => test_data1
-		-- 	,DataB  => test_data2
-		-- 	,Result => mpy_out
-		-- );
-		--       process(clk120Mhz) 
-		--       begin
-		--           if rising_edge(clk120Mhz) then
-		-- 		CASE test_data3(1 downto 0) is
-		--                   WHEN "00" =>
-		--                       res_buf <= signed(mpy_out) + shift_left(resize(signed(test_data4), res'length),20);
-		--                   WHEN "01" =>
-		--                       res_buf <= signed(mpy_out) - shift_left(resize(signed(test_data4), res'length),20);
-		--                   WHEN "10" =>
-		--                       res_buf <= signed(mpy_out) - res_buf;
-		--                   WHEN others => --"11"
-		--                       res_buf <= signed(mpy_out) + res_buf;
-		--               end CASE;
-		--               res <= res_buf;
-		--
-		-- 	end if;
-		--       end process;
-        
-/*
-		-- instantiated fmac does not meet timing
-		u_fmac : fmac
-		port map(
-            CLK0        => clk120Mhz
-            ,CE0        => test_data3(0)
-            ,RST0       => test_data3(1)
-            ,ACCUMSLOAD => '0'
-            ,ADDNSUB    => '0'
-            ,A          => test_data1_buf
-            ,B          => test_data2_buf
-            ,LD         => (others => '0')
-            ,OVERFLOW   => open
-            ,ACCUM      => mpy_buf2
-		);
-*/
-/*
-        process(clk120Mhz) 
-        begin
-            if rising_edge(clk120Mhz) then
-				test_data1_buf <= test_data1;
-				test_data2_buf <= test_data2;
-                mpy_buf <= mpy_buf2;
-                mpy_out <= mpy_buf;
-            end if;
-        end process;
-*/
-
-		
-		
-		-- example modified to this project does not work
-		-- taken from appendixB of ECP5 and ECP5-5G sysDSP User Guide
-		-- https://www.latticesemi.com/view_document?document_id=50469
-		/*
-		u_mult : entity work.fixed_dsp
-		port map(
-			reset => test_data3(1)
-			, clk => clk120Mhz
-			,dataax => test_data1
-			,dataay => test_data2
-			,dataout => mpy_out
-			);
-			*/
-		
-		
-		/*
-		-- does not meet timing for some reason
-		mpy_buf <= mpya * mpyb;
-		process(clk120MHz)
-		begin
-			if rising_edge(clk120MHz) then
-				--p1
-				mpya <= signed(test_data1);
-				mpyb <= signed(test_data2);
-				--p2
-				mpy_out <= std_logic_vector(mpy_buf);
-			end if;
-		end process;
-		*/
-		
-		/*
-		-- also does not meet timing
-		-- taken from appendixB of ECP5 and ECP5-5G sysDSP User Guide
-		-- https://www.latticesemi.com/view_document?document_id=50469
-		process(clk120Mhz, test_data3(1))
-		begin
-			if test_data3(1) = '1' then
-				mpya <= (others => '0');
-				mpyb <= (others => '0');
-			elsif rising_edge(clk120MHz) then
-				--p1
-				mpya <= signed(test_data1);
-				mpyb <= signed(test_data2);
-				--p2
-			end if;
-		end process;
-		
-		mpy_buf <= mpya * mpyb;	
-		process(clk120Mhz, test_data3(1))
-		begin
-			if test_data3(1) = '1' then
-				mpy_out <= (others => '0');
-			elsif rising_edge(clk120MHz) then
-				--p2
-				mpy_out <= std_logic_vector(mpy_buf);
-				--p3
-			end if;
-		end process;
-*/
-				
 
 ------------------------------------------------------------------------
 end behavioral;

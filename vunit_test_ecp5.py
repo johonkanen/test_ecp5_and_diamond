@@ -44,7 +44,7 @@ v2008.add_source_files(ROOT / MPROC / "vhdl2008/microprogram_controller.vhd")
 # entity + the ecp5 architecture that uses the mpy_32x32 hard IP (stood
 # in for here by sim_mpy32x32.vhd below), not the generic fixed_dsp.vhd
 # / rtl combo used by the hVHDL_fixed_point submodule's own testbench
-v2008.add_source_files(ROOT / MPROC / "source/hVHDL_fixed_point/fixed_dsp/ecp5_fixed_dsp.vhd")
+v2008.add_source_files(ROOT / MPROC / "source/hVHDL_fixed_point/fixed_dsp/fixed_dsp.vhd")
 v2008.add_source_files(ROOT / MPROC / "source/hVHDL_fixed_point/fixed_dsp/arch_ecp5_fixed_dsp.vhd")
 
 v2008.add_source_files(ROOT / MPROC / "testbenches/vhdl2008/microprogram_sequencer_tb.vhd")
