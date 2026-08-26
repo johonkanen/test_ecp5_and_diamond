@@ -503,7 +503,7 @@ begin
         fixed_dsp_in.a <= signed(test_data1);
         fixed_dsp_in.d <= signed(test_data3);
         fixed_dsp_in.b <= signed(test_data2);
-        fixed_dsp_in.c <= signed(test_data4);
+        fixed_dsp_in.c <= shift_left(resize(signed(test_data4),64),20);
 
         fixed_dsp_in.request_with_1           <= '1';
         fixed_dsp_in.accumulate_with_1        <= '0';
@@ -516,7 +516,7 @@ begin
         fixed_dsp_out.result <= res;
 
         u_ecp5_fixed_dsp : entity work.fixed_dsp
-        generic map(g_radix => 20)
+        -- generic map(g_radix => 20)
         port map(
             clock => clk120Mhz
             ,fixed_dsp_in  => fixed_dsp_in
