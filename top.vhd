@@ -270,7 +270,7 @@ architecture behavioral of top is
 
     signal sine_counter : natural := 0;
     signal sine_angle : unsigned(15 downto 0) := (others => '0');
-    constant sine_count_max : natural := 2**16-1;
+    constant sine_count_max : natural := 1831;
 
 begin
 
@@ -576,7 +576,7 @@ begin
                 request_sine(sine_calculator_in, sine_angle);
 
                 if sine_calculator_out.ready_with_1 = '1' then
-                    sine_result <= std_logic_vector(resize(sine_calculator_out.sine, sine_result'length));
+                    sine_result <= std_logic_vector(resize(sine_calculator_out.sine, sine_result'length) + 100e3);
                 end if;
             end if;
         end process;
