@@ -268,6 +268,10 @@ architecture behavioral of top is
     );
     ------------------------------------------------------------------------
 
+    signal sine_counter : natural := 0;
+    signal sine_angle : unsigned(15 downto 0) := (others => '0');
+    constant sine_count_max : natural := 2**16-1;
+
 begin
 
     ada : entity work.spi3w_ads7056_driver
@@ -560,7 +564,16 @@ begin
         sine_request : process(clk120Mhz)
         begin
             if rising_edge(clk120Mhz) then
-                request_sine(sine_calculator_in, unsigned(test_data9(angle_word_length-1 downto 0)));
+                if sine_counter < sine_count_max then
+                    sine_counter <= sine_counter + 1;
+                else
+                    sine_counter <= 0;
+                end if;
+                if sine_counter = 0 then
+                    sine_angle <= sine_angle + 1;
+                end if;
+
+                request_sine(sine_calculator_in, sine_angle);
 
                 if sine_calculator_out.ready_with_1 = '1' then
                     sine_result <= std_logic_vector(resize(sine_calculator_out.sine, sine_result'length));
