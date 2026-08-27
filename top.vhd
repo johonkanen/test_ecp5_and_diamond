@@ -241,6 +241,33 @@ architecture behavioral of top is
 
     signal ready_with_1 : std_logic;
 
+    ------------------------------------------------------------------------
+    -- sine_calculator test hookup : test_data9's low angle_word_length
+    -- bits drive the angle, continuously re-requested every cycle (its
+    -- fifo handles that fine, same as the "continuous" testbench) ; the
+    -- result is read back, sign-extended to a full bus word, at
+    -- sine_result's address. gets its own dedicated fixed_dsp(ecp5),
+    -- separate from the one already wired to test_data1..4 above
+    use work.lut_sine_pkg.all;
+    use work.sine_calculator_pkg.all;
+
+    signal test_data9 : std_logic_vector(31 downto 0) := (others => '0');
+    signal sine_result : std_logic_vector(31 downto 0) := (others => '0');
+
+    signal sine_calculator_in  : sine_calculator_in_record;
+    signal sine_calculator_out : sine_calculator_out_record;
+
+    signal sine_fixed_dsp_in  : fixed_dsp_in_record(
+        a(31 downto 0)
+        ,d(31 downto 0)
+        ,b(31 downto 0)
+        ,c(63 downto 0)
+    );
+    signal sine_fixed_dsp_out : fixed_dsp_out_record(
+        result(63 downto 0)
+    );
+    ------------------------------------------------------------------------
+
 begin
 
     ada : entity work.spi3w_ads7056_driver
@@ -463,7 +490,9 @@ begin
 				connect_read_only_data_to_address(bus_from_communications , bus_from_top , 9 , adb_conversion);
 				connect_read_only_data_to_address(bus_from_communications , bus_from_top , 10 , llc_ad_conversion);
 				connect_read_only_data_to_address(bus_from_communications , bus_from_top , 11 , dhb_ad_conversion);
-				
+				connect_data_to_address(bus_from_communications           , bus_from_top , 12 , test_data9);
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , 13 , sine_result);
+
 				init_ram(ram_a_in);
                 -- create_ads7056_driver(ad1,ada_data, ada_cs, ada_clock); 
 
@@ -521,6 +550,38 @@ begin
             clock => clk120Mhz
             ,fixed_dsp_in  => fixed_dsp_in
             ,fixed_dsp_out => fixed_dsp_out
+        );
+
+------------------------------------------------------------------------
+-- sine_calculator test hookup : test_data9's low angle_word_length bits
+-- drive the angle, re-requested every cycle (matches the sine_calculator_tb
+-- "continuous" config, which proves the fifo tracks this fine) ; the
+-- result is latched into sine_result whenever it becomes ready
+        sine_request : process(clk120Mhz)
+        begin
+            if rising_edge(clk120Mhz) then
+                request_sine(sine_calculator_in, unsigned(test_data9(angle_word_length-1 downto 0)));
+
+                if sine_calculator_out.ready_with_1 = '1' then
+                    sine_result <= std_logic_vector(resize(sine_calculator_out.sine, sine_result'length));
+                end if;
+            end if;
+        end process;
+
+        u_sine_fixed_dsp : entity work.fixed_dsp
+        port map(
+            clock => clk120Mhz
+            ,fixed_dsp_in  => sine_fixed_dsp_in
+            ,fixed_dsp_out => sine_fixed_dsp_out
+        );
+
+        u_sine_calculator : entity work.sine_calculator
+        port map(
+            clock => clk120Mhz
+            ,sine_calculator_in  => sine_calculator_in
+            ,sine_calculator_out => sine_calculator_out
+            ,fixed_dsp_in  => sine_fixed_dsp_in
+            ,fixed_dsp_out => sine_fixed_dsp_out
         );
 
 ------------------------------------------------------------------------
