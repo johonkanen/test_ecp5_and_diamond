@@ -143,10 +143,10 @@ begin
                 delay_checked_for_trigger <= trigger_count;
             end if;
 
-            if muxed_adc_out.ready_with_1 = '1' then
-                check(muxed_adc_out.mux_pos_of_measurement = pending_tag,
+            if adc_ready(muxed_adc_out) then
+                check(get_sampled_mux_pos(muxed_adc_out) = pending_tag,
                     "mux tag mismatch at result " & natural'image(result_count));
-                check(muxed_adc_out.measurement = expected_pattern(to_integer(unsigned(pending_tag))),
+                check(get_adc_result(muxed_adc_out) = expected_pattern(to_integer(unsigned(pending_tag))),
                     "measurement mismatch at result " & natural'image(result_count));
 
                 if result_count = num_triggers-1 then
