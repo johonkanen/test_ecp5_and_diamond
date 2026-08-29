@@ -32,6 +32,7 @@ architecture vunit_simulation of muxed_adc_tb is
     constant g_u8_clk_cnt             : integer := 2;
     constant g_u8_clks_per_conversion : integer := 18;
     constant g_sh_counter_latch       : integer := 9;
+    constant g_mux_switch_delay_in_clocks : natural := 20;
 
     constant trigger_period    : natural := 80;
     constant num_triggers      : natural := 20;
@@ -58,13 +59,21 @@ architecture vunit_simulation of muxed_adc_tb is
     -- calibration has finished, instead of racing it at simulation time 0
     signal trigger_counter : natural range 0 to trigger_period-1 := 1;
     signal trigger_count   : natural := 0;
-    signal next_mux_pos    : natural range 0 to 7 := 0;
+    signal next_mux_pos    : std_logic_vector(2 downto 0) := (others => '0');
 
     -- mirrors muxed_adc's own current_mux_pos/converted_mux_pos bookkeeping,
     -- computed independently here so the checks below aren't just comparing
     -- the dut against itself
-    signal shadow_current_mux_pos : natural range 0 to 7 := 0;
-    signal pending_tag            : natural range 0 to 7 := 0;
+    signal shadow_current_mux_pos : std_logic_vector(2 downto 0) := (others => '0');
+    signal pending_tag            : std_logic_vector(2 downto 0) := (others => '0');
+
+    -- mux_io's value just before the most recent trigger, so its checks
+    -- below can confirm the switch really is delayed, not immediate
+    signal mux_io_before_trigger : std_logic_vector(2 downto 0) := (others => '0');
+    -- highest trigger_count the delay checks have already run for, so a
+    -- free-running trigger_counter wrap after the last real trigger can't
+    -- spuriously re-trigger them against now-stale expected values
+    signal delay_checked_for_trigger : natural := 0;
 
     -- requests are issued in strict order and never reordered (only one
     -- conversion is ever in flight at a time), so the k'th ready pulse
@@ -103,16 +112,41 @@ begin
             if trigger_counter = 0 and trigger_count < num_triggers then
                 request_measurement(muxed_adc_in, next_mux_pos);
 
+                mux_io_before_trigger  <= mux_io;
                 pending_tag            <= shadow_current_mux_pos;
                 shadow_current_mux_pos <= next_mux_pos;
-                next_mux_pos           <= (next_mux_pos + 1) mod 8;
+                next_mux_pos           <= std_logic_vector(unsigned(next_mux_pos) + 1);
                 trigger_count          <= trigger_count + 1;
+            end if;
+
+            -- mux_io must still hold its pre-trigger value this close to (but
+            -- before) the configured deadline -- proves the switch is tied to
+            -- g_mux_switch_delay_in_clocks, not immediate or hardcoded shorter.
+            -- guarded on delay_checked_for_trigger so this only ever evaluates
+            -- once per real trigger -- trigger_counter keeps free-running
+            -- with no new trigger once num_triggers is reached, which would
+            -- otherwise make a stale comparison here spurious
+            if trigger_counter = g_mux_switch_delay_in_clocks - 5 and trigger_count > 0
+                and delay_checked_for_trigger < trigger_count
+            then
+                check(mux_io = mux_io_before_trigger,
+                    "mux_io switched before the configured delay elapsed, trigger " & natural'image(trigger_count));
+            end if;
+
+            -- ...but must have reached the newly requested position well
+            -- before the delay's deadline (with margin to spare)
+            if trigger_counter = g_mux_switch_delay_in_clocks + 5 and trigger_count > 0
+                and delay_checked_for_trigger < trigger_count
+            then
+                check(mux_io = shadow_current_mux_pos,
+                    "mux_io did not switch within the configured delay, trigger " & natural'image(trigger_count));
+                delay_checked_for_trigger <= trigger_count;
             end if;
 
             if muxed_adc_out.ready_with_1 = '1' then
                 check(muxed_adc_out.mux_pos_of_measurement = pending_tag,
                     "mux tag mismatch at result " & natural'image(result_count));
-                check(muxed_adc_out.measurement = expected_pattern(pending_tag),
+                check(muxed_adc_out.measurement = expected_pattern(to_integer(unsigned(pending_tag))),
                     "measurement mismatch at result " & natural'image(result_count));
 
                 if result_count = num_triggers-1 then
@@ -132,7 +166,7 @@ begin
         variable shift_register : std_logic_vector(17 downto 0);
     begin
         if falling_edge(ad_cs) then
-            shift_register := (17 downto 2 => expected_pattern(pending_tag), others => '1');
+            shift_register := (17 downto 2 => expected_pattern(to_integer(unsigned(pending_tag))), others => '1');
         end if;
 
         if rising_edge(ad_clock) then
@@ -144,7 +178,7 @@ begin
 ------------------------------------------------------------------------
 
     u_muxed_adc : entity work.muxed_adc
-    generic map(g_u8_clk_cnt, g_u8_clks_per_conversion, g_sh_counter_latch)
+    generic map(g_u8_clk_cnt, g_u8_clks_per_conversion, g_sh_counter_latch, g_mux_switch_delay_in_clocks)
     port map(
         clock    => simulator_clock
         ,mux_io  => mux_io
