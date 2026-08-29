@@ -13,12 +13,34 @@ package address_pkg is
     constant address_test_data4        : natural := 5;
     constant address_test_data5        : natural := 6;
     constant address_test_data6        : natural := 7;
-    constant address_ada_conversion    : natural := 8;
-    constant address_adb_conversion    : natural := 9;
+    -- address 8/9 used to be ada_conversion/adb_conversion (a single,
+    -- unmuxed reading each) ; ada/adb are muxed_adc scanners now, each
+    -- with 8 channels of its own below, so 8/9 are retired rather than
+    -- reused, to avoid renumbering everything that follows them
     constant address_llc_ad_conversion : natural := 10;
     constant address_dhb_ad_conversion : natural := 11;
     constant address_test_data9        : natural := 12;
     constant address_sine_result       : natural := 13;
+
+    -- ada/adb continuously round-robin mux positions 0 to 7 ; each
+    -- channel's latest reading lands in its own read-only address
+    constant address_ada_ch0 : natural := 14;
+    constant address_ada_ch1 : natural := 15;
+    constant address_ada_ch2 : natural := 16;
+    constant address_ada_ch3 : natural := 17;
+    constant address_ada_ch4 : natural := 18;
+    constant address_ada_ch5 : natural := 19;
+    constant address_ada_ch6 : natural := 20;
+    constant address_ada_ch7 : natural := 21;
+
+    constant address_adb_ch0 : natural := 22;
+    constant address_adb_ch1 : natural := 23;
+    constant address_adb_ch2 : natural := 24;
+    constant address_adb_ch3 : natural := 25;
+    constant address_adb_ch4 : natural := 26;
+    constant address_adb_ch5 : natural := 27;
+    constant address_adb_ch6 : natural := 28;
+    constant address_adb_ch7 : natural := 29;
 
     constant test_memory_address_low  : natural := 100;
     constant test_memory_address_high : natural := 611;

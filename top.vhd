@@ -206,13 +206,32 @@ architecture behavioral of top is
 	--    signal ad1 : ads7056_record := init_ads7056;
 
 
-    signal ada_conversion       : std_logic_vector(15 downto 0);
     signal start_ada_conversion : std_logic := '0';
     signal conversion_counter   : natural   := 0;
-    signal adb_conversion       : std_logic_vector(15 downto 0);
 
     signal llc_ad_conversion : std_logic_vector(15 downto 0);
     signal dhb_ad_conversion : std_logic_vector(15 downto 0);
+
+    ------------------------------------------------------------------------
+    -- ada/adb muxed_adc scan : each continuously round-robins mux
+    -- positions 0 to 7, one measurement in flight at a time ; the latest
+    -- reading for each channel lands in its own slot below, tagged by
+    -- get_sampled_mux_pos so a reading is never stored under the wrong
+    -- channel even while a scan is mid-flight
+    use work.muxed_adc_pkg.all;
+
+    signal muxed_adc_a_in  : muxed_adc_in_record := init_muxed_adc_in;
+    signal muxed_adc_a_out : muxed_adc_out_record;
+    signal muxed_adc_b_in  : muxed_adc_in_record := init_muxed_adc_in;
+    signal muxed_adc_b_out : muxed_adc_out_record;
+
+    signal ada_next_channel : std_logic_vector(2 downto 0) := (others => '0');
+    signal adb_next_channel : std_logic_vector(2 downto 0) := (others => '0');
+
+    type adc_channel_array is array (0 to 7) of std_logic_vector(15 downto 0);
+    signal ada_channels : adc_channel_array := (others => (others => '0'));
+    signal adb_channels : adc_channel_array := (others => (others => '0'));
+    ------------------------------------------------------------------------
 	
 	--constant zero : 
 
@@ -274,33 +293,29 @@ architecture behavioral of top is
 
 begin
 
-    ada : entity work.spi3w_ads7056_driver
-        generic map(2,18,9)
+    u_muxed_adc_a : entity work.muxed_adc
+        generic map(2,18,9,20)
         port map(
-                clk120MHz, 
-                '1',
-                ada_cs,
-                ada_clock,
-                ada_data, 
-                start_ada_conversion,
-                open,
-                open,
-                open,
-                ada_conversion);
+                clock    => clk120MHz
+                ,mux_io  => ada_mux
+                ,ad_clock => ada_clock
+                ,ad_cs    => ada_cs
+                ,ad_data  => ada_data
+                ,muxed_adc_in  => muxed_adc_a_in
+                ,muxed_adc_out => muxed_adc_a_out
+        );
 
-    adb : entity work.spi3w_ads7056_driver
-        generic map(2,18,9)
+    u_muxed_adc_b : entity work.muxed_adc
+        generic map(2,18,9,20)
         port map(
-                clk120MHz, 
-                '1',
-                adb_cs,
-                adb_clock,
-                adb_data, 
-                start_ada_conversion,
-                open,
-                open,
-                open,
-                adb_conversion);
+                clock    => clk120MHz
+                ,mux_io  => adb_mux
+                ,ad_clock => adb_clock
+                ,ad_cs    => adb_cs
+                ,ad_data  => adb_data
+                ,muxed_adc_in  => muxed_adc_b_in
+                ,muxed_adc_out => muxed_adc_b_out
+        );
 
     ads120s101_a : entity work.spi3w_ads7056_driver
         generic map(6,16,9)
@@ -412,15 +427,7 @@ begin
 	end process;
 
         -- onboard adc io
-        --ada_data  : in std_logic;
-        -- ada_clock  <= '0';
-        -- ada_cs     <= '0';
-        ada_mux   <= "011";
-
-        --adb_data  : in std_logic;
-        -- adb_clock  <= '0';
-        -- adb_cs     <= '0';
-        adb_mux   <= "011";
+        -- ada_mux/adb_mux are driven by u_muxed_adc_a/u_muxed_adc_b above
 
         -- dhb io
         -- dhb_primary_high  <= '0';
@@ -491,12 +498,28 @@ begin
 				connect_data_to_address(bus_from_communications           , bus_from_top , address_test_data4 , test_data4);
 				connect_data_to_address(bus_from_communications           , bus_from_top , address_test_data5 , test_data5);
 				connect_data_to_address(bus_from_communications           , bus_from_top , address_test_data6 , test_data6);
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_conversion , ada_conversion);
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_conversion , adb_conversion);
 				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_llc_ad_conversion , llc_ad_conversion);
 				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_dhb_ad_conversion , dhb_ad_conversion);
 				connect_data_to_address(bus_from_communications           , bus_from_top , address_test_data9 , test_data9);
 				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_sine_result , sine_result);
+
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch0 , std_logic_vector(resize(unsigned(ada_channels(0)), 32)));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch1 , std_logic_vector(resize(unsigned(ada_channels(1)), 32)));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch2 , std_logic_vector(resize(unsigned(ada_channels(2)), 32)));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch3 , std_logic_vector(resize(unsigned(ada_channels(3)), 32)));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch4 , std_logic_vector(resize(unsigned(ada_channels(4)), 32)));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch5 , std_logic_vector(resize(unsigned(ada_channels(5)), 32)));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch6 , std_logic_vector(resize(unsigned(ada_channels(6)), 32)));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch7 , std_logic_vector(resize(unsigned(ada_channels(7)), 32)));
+
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch0 , std_logic_vector(resize(unsigned(adb_channels(0)), 32)));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch1 , std_logic_vector(resize(unsigned(adb_channels(1)), 32)));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch2 , std_logic_vector(resize(unsigned(adb_channels(2)), 32)));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch3 , std_logic_vector(resize(unsigned(adb_channels(3)), 32)));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch4 , std_logic_vector(resize(unsigned(adb_channels(4)), 32)));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch5 , std_logic_vector(resize(unsigned(adb_channels(5)), 32)));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch6 , std_logic_vector(resize(unsigned(adb_channels(6)), 32)));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch7 , std_logic_vector(resize(unsigned(adb_channels(7)), 32)));
 
 				init_ram(ram_a_in);
                 -- create_ads7056_driver(ad1,ada_data, ada_cs, ada_clock); 
@@ -597,6 +620,33 @@ begin
             ,fixed_dsp_in  => sine_fixed_dsp_in
             ,fixed_dsp_out => sine_fixed_dsp_out
         );
+
+------------------------------------------------------------------------
+-- ada/adb continuous mux scan : request_measurement is asserted every
+-- cycle, so muxed_adc's own busy-gating paces the scan at the hardware's
+-- own max rate -- the instant a conversion completes, its result is
+-- stored under the channel get_sampled_mux_pos says it actually belongs
+-- to (not the channel currently being requested), and the next mux
+-- position in the round-robin is requested
+        mux_scan : process(clk120Mhz)
+        begin
+            if rising_edge(clk120Mhz) then
+
+                request_measurement(muxed_adc_a_in, ada_next_channel);
+                request_measurement(muxed_adc_b_in, adb_next_channel);
+
+                if adc_ready(muxed_adc_a_out) then
+                    ada_channels(to_integer(unsigned(get_sampled_mux_pos(muxed_adc_a_out)))) <= get_adc_result(muxed_adc_a_out);
+                    ada_next_channel <= std_logic_vector(unsigned(ada_next_channel) + 1);
+                end if;
+
+                if adc_ready(muxed_adc_b_out) then
+                    adb_channels(to_integer(unsigned(get_sampled_mux_pos(muxed_adc_b_out)))) <= get_adc_result(muxed_adc_b_out);
+                    adb_next_channel <= std_logic_vector(unsigned(adb_next_channel) + 1);
+                end if;
+
+            end if;
+        end process;
 
 ------------------------------------------------------------------------
 end behavioral;
