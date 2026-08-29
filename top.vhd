@@ -478,24 +478,25 @@ begin
 		
 		test_uart : process(clk120Mhz)
 			use work.fpga_interconnect_pkg.all;
+			use work.address_pkg.all;
 			variable data : std_logic_vector(31 downto 0);
 		begin
-			if rising_edge(clk120Mhz) then	
-			
+			if rising_edge(clk120Mhz) then
+
 				init_bus(bus_from_top);
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , 1 , std_logic_vector(resize(shift_right(signed(res) , 20) , 32)));
-				connect_data_to_address(bus_from_communications           , bus_from_top , 2 , test_data1);
-				connect_data_to_address(bus_from_communications           , bus_from_top , 3 , test_data2);
-				connect_data_to_address(bus_from_communications           , bus_from_top , 4 , test_data3);
-				connect_data_to_address(bus_from_communications           , bus_from_top , 5 , test_data4);
-				connect_data_to_address(bus_from_communications           , bus_from_top , 6 , test_data5);
-				connect_data_to_address(bus_from_communications           , bus_from_top , 7 , test_data6);
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , 8 , ada_conversion);
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , 9 , adb_conversion);
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , 10 , llc_ad_conversion);
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , 11 , dhb_ad_conversion);
-				connect_data_to_address(bus_from_communications           , bus_from_top , 12 , test_data9);
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , 13 , sine_result);
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_fixed_dsp_result , std_logic_vector(resize(shift_right(signed(res) , 20) , 32)));
+				connect_data_to_address(bus_from_communications           , bus_from_top , address_test_data1 , test_data1);
+				connect_data_to_address(bus_from_communications           , bus_from_top , address_test_data2 , test_data2);
+				connect_data_to_address(bus_from_communications           , bus_from_top , address_test_data3 , test_data3);
+				connect_data_to_address(bus_from_communications           , bus_from_top , address_test_data4 , test_data4);
+				connect_data_to_address(bus_from_communications           , bus_from_top , address_test_data5 , test_data5);
+				connect_data_to_address(bus_from_communications           , bus_from_top , address_test_data6 , test_data6);
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_conversion , ada_conversion);
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_conversion , adb_conversion);
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_llc_ad_conversion , llc_ad_conversion);
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_dhb_ad_conversion , dhb_ad_conversion);
+				connect_data_to_address(bus_from_communications           , bus_from_top , address_test_data9 , test_data9);
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_sine_result , sine_result);
 
 				init_ram(ram_a_in);
                 -- create_ads7056_driver(ad1,ada_data, ada_cs, ada_clock); 
@@ -512,22 +513,22 @@ begin
                 end if;
 
 				
-				if read_is_requested(bus_from_communications) 
-					and get_address(bus_from_communications) >= 100
-					and get_address(bus_from_communications) <= 611
+				if read_is_requested(bus_from_communications)
+					and get_address(bus_from_communications) >= test_memory_address_low
+					and get_address(bus_from_communications) <= test_memory_address_high
 				then
-					request_data_from_ram(ram_a_in, get_address(bus_from_communications) - 100);
+					request_data_from_ram(ram_a_in, get_address(bus_from_communications) - test_memory_address_low);
 				end if;
-				
+
 				if ram_read_is_ready(ram_a_out) then
-					write_data_to_address(bus_from_top, 0, get_ram_data(ram_a_out));
+					write_data_to_address(bus_from_top, address_ram_a_readback, get_ram_data(ram_a_out));
 				end if;
-				
+
 				if write_from_bus_is_requested(bus_from_communications)
-					and get_address(bus_from_communications) >= 1000
-					and get_address(bus_from_communications) <= 1611
+					and get_address(bus_from_communications) >= test_memory_write_address_low
+					and get_address(bus_from_communications) <= test_memory_write_address_high
 				then
-					write_data_to_ram(ram_b_in, get_address(bus_from_communications) - 1000, get_slv_data(bus_from_communications));
+					write_data_to_ram(ram_b_in, get_address(bus_from_communications) - test_memory_write_address_low, get_slv_data(bus_from_communications));
 				end if;
 			
 			end if;

@@ -92,6 +92,7 @@ add_vhdl_file_to_project $path_to_this_file/test_processor.vhd
 add_vhdl_file_to_project $path_to_this_file/arch_processor.vhd
 # end microprogram processor modules
 
+add_vhdl_file_to_project $path_to_this_file/address_pkg.vhd
 add_vhdl_file_to_project $path_to_this_file/top.vhd
 
 prj_src add -exclude $path_to_this_file/ecp5_compile.lpf
