@@ -618,7 +618,7 @@ begin
                 request_sine(sine_calculator_in, sine_angle);
 
                 if sine_calculator_out.ready_with_1 = '1' then
-                    sine_result <= std_logic_vector(resize(sine_calculator_out.sine, sine_result'length) + 100e3);
+                    sine_result <= std_logic_vector(resize(sine_calculator_out.sine, sine_result'length));
                 end if;
             end if;
         end process;
