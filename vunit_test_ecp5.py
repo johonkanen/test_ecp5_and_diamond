@@ -95,6 +95,40 @@ v2008.add_source_files(ROOT / "testbenches/adc_scale_pipeline_tb.vhd")
 
 v2008.add_source_files(ROOT / "testbenches/dab_modulator_tb.vhd")
 
+# rgb_led module : wraps the "heartbeat + pwm" behaviour of the two
+# inline rgb-led processes in top.vhd (top.vhd:388-443) into an entity.
+# the testbench runs it against an independent reference model ; counter
+# sizes are generics so the sim runs in microseconds instead of 60e6 counts.
+v2008.add_source_files(ROOT / "rgb_led.vhd")
+v2008.add_source_files(ROOT / "testbenches/rgb_led_blinker_tb.vhd")
+rgb_led_blinker_tb = v2008.test_bench("rgb_led_blinker_tb")
+# one pwm threshold per rgb-led io. 256 (= g_pwm_max+1) pins a channel
+# permanently high, i.e. "off" for a common-anode led.
+rgb_led_blinker_tb.add_config(
+    name="rgb_led1",  # old rgb_led1 : red blinks/dims, green+blue off
+    generics=dict(g_blink_half_period=1000, g_pwm_max=255,
+                  g_pwm_threshold_0=100, g_pwm_threshold_1=256, g_pwm_threshold_2=256,
+                  g_active_bit=0),
+)
+rgb_led_blinker_tb.add_config(
+    name="rgb_led2",  # old rgb_led2 : green blinks/dims, red+blue off
+    generics=dict(g_blink_half_period=1500, g_pwm_max=255,
+                  g_pwm_threshold_0=256, g_pwm_threshold_1=200, g_pwm_threshold_2=256,
+                  g_active_bit=1),
+)
+rgb_led_blinker_tb.add_config(
+    name="independent_rgb",  # all three colours dimmed to their own level
+    generics=dict(g_blink_half_period=900, g_pwm_max=255,
+                  g_pwm_threshold_0=64, g_pwm_threshold_1=128, g_pwm_threshold_2=192,
+                  g_active_bit=0),
+)
+rgb_led_blinker_tb.add_config(
+    name="pwm_extremes",  # channel always-on, mid, always-off ; heartbeat on blue
+    generics=dict(g_blink_half_period=800, g_pwm_max=255,
+                  g_pwm_threshold_0=0, g_pwm_threshold_1=128, g_pwm_threshold_2=256,
+                  g_active_bit=2),
+)
+
 v2008.add_source_files(ROOT / "testbenches/sine_calculator_tb.vhd")
 sine_calculator_tb = v2008.test_bench("sine_calculator_tb")
 sine_calculator_tb.add_config(name="continuous", generics=dict(use_gaps=False))

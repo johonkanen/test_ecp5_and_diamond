@@ -325,10 +325,11 @@ begin
                 ,adb_clock => adb_clock
                 ,adb_cs    => adb_cs
                 ,adb_data  => adb_data
-                ,bus_to_adc_scaler   => bus_to_adc_scaler
-                ,bus_from_adc_scaler => bus_from_adc_scaler
-                ,muxed_adc_a_in => muxed_adc_a_in
-                ,muxed_adc_b_in => muxed_adc_b_in
+
+                ,bus_to_adc_scaler      => bus_from_communications
+                ,bus_from_adc_scaler    => bus_from_adc_scaler
+                ,muxed_adc_a_in         => muxed_adc_a_in
+                ,muxed_adc_b_in         => muxed_adc_b_in
                 ,adc_scale_pipeline_out => adc_scale_pipeline_out
         );
 
@@ -476,6 +477,7 @@ begin
         --rgb_led2 <= (others => '0');
         rgb_led3 <= (others => '1');
 		
+---------------------------------------------------
 		u_communications : entity work.fpga_communications
 		generic map(
 					--work.fpga_interconnect_pkg,
@@ -489,6 +491,7 @@ begin
 			,bus_from_communications => bus_from_communications
 		);
 
+---------------------------------------------------
         process(clk120Mhz)
 			use work.fpga_interconnect_pkg.all;
         begin
@@ -499,8 +502,7 @@ begin
             end if;
         end process;
 
-        bus_to_adc_scaler <= bus_from_communications;
-		
+---------------------------------------------------
 		test_uart : process(clk120Mhz)
 			use work.fpga_interconnect_pkg.all;
 			use work.address_pkg.all;
