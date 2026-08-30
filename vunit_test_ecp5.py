@@ -90,6 +90,9 @@ v2008.add_source_files(ROOT / "testbenches/ads7056_entity_tb.vhd")
 v2008.add_source_files(ROOT / "muxed_adc.vhd")
 v2008.add_source_files(ROOT / "testbenches/muxed_adc_tb.vhd")
 
+v2008.add_source_files(ROOT / "adc_scale_pipeline.vhd")
+v2008.add_source_files(ROOT / "testbenches/adc_scale_pipeline_tb.vhd")
+
 v2008.add_source_files(ROOT / "testbenches/dab_modulator_tb.vhd")
 
 v2008.add_source_files(ROOT / "testbenches/sine_calculator_tb.vhd")

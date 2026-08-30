@@ -277,6 +277,11 @@ architecture behavioral of top is
 
 begin
 
+    ------------------------------------------------------------------------
+    u_dpram : entity work.dual_port_ram
+    generic map(g_dpram_subtype => dp_ram_subtype, g_ram_init_values => init_values)
+    port map(clk120MHz, ram_a_in, ram_a_out, ram_b_in, ram_b_out);
+    ------------------------------------------------------------------------
     u_muxed_adc_a : entity work.muxed_adc
         generic map(2,18,9,20)
         port map(
