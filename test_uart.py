@@ -12,6 +12,7 @@ sys.path.append(abs_path + './source/fpga_communication/fpga_uart_pc_software/')
 comport = sys.argv[1]
 
 stream_length = 200000
+adc_stream_length = 20000
 
 from uart_communication_functions import *
 
@@ -48,6 +49,8 @@ def load_registers(vhd_path):
 
 registers = load_registers(os.path.join(abs_path, "address_pkg.vhd"))
 sine_result_address = next(address for address, name in registers.items() if name == "sine_result")
+adc_channel_addresses = {name: address for address, name in registers.items()
+    if name.startswith("ada_ch") or name.startswith("adb_ch")}
 
 def test_hw():
     print("reading all registers")
@@ -56,7 +59,16 @@ def test_hw():
 
     print("streaming", stream_length, "points from address", sine_result_address, ", sine_result")
     signed_stream = to_signed32(uart.stream_data_from_address(sine_result_address, stream_length))
+    pyplot.figure()
     pyplot.plot(signed_stream)
+
+    print("streaming", adc_stream_length, "points from each of", len(adc_channel_addresses), "adc mux positions")
+    pyplot.figure()
+    for name, address in sorted(adc_channel_addresses.items(), key=lambda item: item[1]):
+        channel_stream = to_signed32(uart.stream_data_from_address(address, adc_stream_length))
+        pyplot.plot(channel_stream, label=name)
+    pyplot.legend()
+
     pyplot.show()
 
 test_hw()

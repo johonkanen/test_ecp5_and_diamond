@@ -233,22 +233,6 @@ architecture behavioral of top is
     signal adb_channels : adc_channel_array := (others => (others => '0'));
     ------------------------------------------------------------------------
 	
-	--constant zero : 
-
-    -- constant init_dsp_in : work.fixed_dsp_pkg.fixed_dsp_in_record :=(
-    --     a => (31 downto 0 => '0')
-    --     ,b => (31 downto 0 => '0')
-    --     ,c => (31 downto 0 => '0')
-    --     ,d => (31 downto 0 => '0')
-    --     ,request_with_1          => '0'
-    --     ,accumulate_with_1       => '0'
-    --     ,pre_subtract_with_1     => '0'
-    --     ,post_subtract_with_1    => '0'
-    --     ,invert_result_with_1    => '0'
-    --     ,reset_accumulator_with_1=> '0'
-    --
-    -- );
-    -- signal fixed_dsp_in : work.fixed_dsp_pkg.fixed_dsp_in_record := init_dsp_in;
     use work.fixed_dsp_pkg.all;
     constant init_input : fixed_dsp_in_record := init_fixed_dsp_in;
     signal fixed_dsp_in  : init_input'subtype := init_input;
@@ -367,7 +351,7 @@ begin
 	,CLKOP => clk120Mhz
 	,CLKOS => clk240Mhz
     ,CLKOS2 => clk5MHz
-);
+    );
 	
     rgb_led1 <= (0 => led1_buffer(0) or pwm1, others => '1');
 	process(clk120Mhz) is
