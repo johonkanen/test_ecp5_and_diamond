@@ -42,6 +42,19 @@ package address_pkg is
     constant address_adb_ch6 : natural := 28;
     constant address_adb_ch7 : natural := 29;
 
+    -- adc_scale_pipeline's host-facing port b access (live gain/offset
+    -- calibration read/write) : each _read/_write constant is the base
+    -- of its own 16-address window (one per channel, 0..7 = ada,
+    -- 8..15 = adb), _readback is the single fixed address the requested
+    -- value comes back on, matching adc_scale_pipeline's own convention
+    constant adc_scaler_gain_ram_read_address     : natural := 700;
+    constant adc_scaler_gain_ram_write_address    : natural := 720;
+    constant address_adc_scaler_gain_readback     : natural := 740;
+
+    constant adc_scaler_offset_ram_read_address  : natural := 750;
+    constant adc_scaler_offset_ram_write_address : natural := 770;
+    constant address_adc_scaler_offset_readback  : natural := 790;
+
     constant test_memory_address_low  : natural := 100;
     constant test_memory_address_high : natural := 611;
 

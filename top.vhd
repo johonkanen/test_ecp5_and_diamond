@@ -213,24 +213,41 @@ architecture behavioral of top is
     signal dhb_ad_conversion : std_logic_vector(15 downto 0);
 
     ------------------------------------------------------------------------
-    -- ada/adb muxed_adc scan : each continuously round-robins mux
-    -- positions 0 to 7, one measurement in flight at a time ; the latest
-    -- reading for each channel lands in its own slot below, tagged by
-    -- get_sampled_mux_pos so a reading is never stored under the wrong
-    -- channel even while a scan is mid-flight
+    -- ada/adb muxed_adc scan, scaled through adc_scale_pipeline : each
+    -- continuously round-robins mux positions 0 to 7, one measurement in
+    -- flight at a time. adc_scale_pipeline owns the muxed_adc instances
+    -- (and their fixed_dsp/gain/offset rams) internally, so this hookup
+    -- only ever sees the already-scaled result -- it can't watch for
+    -- adc_ready the way a caller with direct muxed_adc access could, so
+    -- the round-robin here advances on a fixed, generous period instead
+    -- (matching adc_scale_pipeline_tb.vhd's own approach)
     use work.muxed_adc_pkg.all;
+    use work.adc_scale_pipeline_pkg.all;
+    use work.address_pkg.all;
 
-    signal muxed_adc_a_in  : muxed_adc_in_record := init_muxed_adc_in;
-    signal muxed_adc_a_out : muxed_adc_out_record;
-    signal muxed_adc_b_in  : muxed_adc_in_record := init_muxed_adc_in;
-    signal muxed_adc_b_out : muxed_adc_out_record;
+    signal muxed_adc_a_in : muxed_adc_in_record := init_muxed_adc_in;
+    signal muxed_adc_b_in : muxed_adc_in_record := init_muxed_adc_in;
 
+    constant adc_scan_trigger_period : natural := 80;
+    signal adc_scan_trigger_counter  : natural range 0 to adc_scan_trigger_period-1 := 1;
     signal ada_next_channel : std_logic_vector(2 downto 0) := (others => '0');
     signal adb_next_channel : std_logic_vector(2 downto 0) := (others => '0');
 
-    type adc_channel_array is array (0 to 7) of std_logic_vector(15 downto 0);
-    signal ada_channels : adc_channel_array := (others => (others => '0'));
-    signal adb_channels : adc_channel_array := (others => (others => '0'));
+    -- combined 0..15 index : 0..7 = ada's channels, 8..15 = adb's,
+    -- matching adc_scale_pipeline_out's own channel numbering directly
+    type adc_scaled_channel_array is array (0 to 15) of std_logic_vector(31 downto 0);
+    signal adc_scaled_channels : adc_scaled_channel_array := (others => (others => '0'));
+
+    signal adc_scale_pipeline_out : adc_scale_pipeline_out_record;
+    signal bus_to_adc_scaler      : work.fpga_interconnect_pkg.fpga_interconnect_record;
+    signal bus_from_adc_scaler    : work.fpga_interconnect_pkg.fpga_interconnect_record;
+
+    -- default calibration : gain ~1.0 (32767 is the closest a signed
+    -- q1.15 fraction gets, since exactly 1.0 doesn't fit), offset 0 --
+    -- an identity scaling, until a host calibrates real values in over
+    -- bus_to_adc_scaler/bus_from_adc_scaler
+    constant adc_scaler_default_gain   : work.dual_port_ram_pkg.ram_array(0 to 15)(15 downto 0) := (others => std_logic_vector(to_signed(32767, 16)));
+    constant adc_scaler_default_offset : work.dual_port_ram_pkg.ram_array(0 to 15)(15 downto 0) := (others => (others => '0'));
     ------------------------------------------------------------------------
 	
     use work.fixed_dsp_pkg.all;
@@ -282,28 +299,37 @@ begin
     generic map(g_dpram_subtype => dp_ram_subtype, g_ram_init_values => init_values)
     port map(clk120MHz, ram_a_in, ram_a_out, ram_b_in, ram_b_out);
     ------------------------------------------------------------------------
-    u_muxed_adc_a : entity work.muxed_adc
-        generic map(2,18,9,20)
+    u_adc_scale_pipeline : entity work.adc_scale_pipeline
+        generic map(
+            g_radix => 15
+            ,g_u8_clk_cnt => 2
+            ,g_u8_clks_per_conversion => 18
+            ,g_sh_counter_latch => 9
+            ,g_mux_switch_delay_in_clocks => 20
+            ,g_gain_values   => adc_scaler_default_gain
+            ,g_offset_values => adc_scaler_default_offset
+            ,g_gain_ram_read_address      => adc_scaler_gain_ram_read_address
+            ,g_gain_ram_write_address     => adc_scaler_gain_ram_write_address
+            ,g_gain_ram_readback_address  => address_adc_scaler_gain_readback
+            ,g_offset_ram_read_address     => adc_scaler_offset_ram_read_address
+            ,g_offset_ram_write_address    => adc_scaler_offset_ram_write_address
+            ,g_offset_ram_readback_address => address_adc_scaler_offset_readback
+        )
         port map(
                 clock    => clk120MHz
-                ,mux_io  => ada_mux
-                ,ad_clock => ada_clock
-                ,ad_cs    => ada_cs
-                ,ad_data  => ada_data
-                ,muxed_adc_in  => muxed_adc_a_in
-                ,muxed_adc_out => muxed_adc_a_out
-        );
-
-    u_muxed_adc_b : entity work.muxed_adc
-        generic map(2,18,9,20)
-        port map(
-                clock    => clk120MHz
-                ,mux_io  => adb_mux
-                ,ad_clock => adb_clock
-                ,ad_cs    => adb_cs
-                ,ad_data  => adb_data
-                ,muxed_adc_in  => muxed_adc_b_in
-                ,muxed_adc_out => muxed_adc_b_out
+                ,ada_mux   => ada_mux
+                ,ada_clock => ada_clock
+                ,ada_cs    => ada_cs
+                ,ada_data  => ada_data
+                ,adb_mux   => adb_mux
+                ,adb_clock => adb_clock
+                ,adb_cs    => adb_cs
+                ,adb_data  => adb_data
+                ,bus_to_adc_scaler   => bus_to_adc_scaler
+                ,bus_from_adc_scaler => bus_from_adc_scaler
+                ,muxed_adc_a_in => muxed_adc_a_in
+                ,muxed_adc_b_in => muxed_adc_b_in
+                ,adc_scale_pipeline_out => adc_scale_pipeline_out
         );
 
     ads120s101_a : entity work.spi3w_ads7056_driver
@@ -468,9 +494,12 @@ begin
         begin
             if rising_edge(clk120Mhz) then
                 bus_to_communications <= bus_from_top
-                                         and bus_from_uproc;
+                                         and bus_from_uproc
+                                         and bus_from_adc_scaler;
             end if;
         end process;
+
+        bus_to_adc_scaler <= bus_from_communications;
 		
 		test_uart : process(clk120Mhz)
 			use work.fpga_interconnect_pkg.all;
@@ -492,23 +521,23 @@ begin
 				connect_data_to_address(bus_from_communications           , bus_from_top , address_test_data9 , test_data9);
 				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_sine_result , sine_result);
 
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch0 , std_logic_vector(resize(unsigned(ada_channels(0)), 32)));
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch1 , std_logic_vector(resize(unsigned(ada_channels(1)), 32)));
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch2 , std_logic_vector(resize(unsigned(ada_channels(2)), 32)));
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch3 , std_logic_vector(resize(unsigned(ada_channels(3)), 32)));
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch4 , std_logic_vector(resize(unsigned(ada_channels(4)), 32)));
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch5 , std_logic_vector(resize(unsigned(ada_channels(5)), 32)));
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch6 , std_logic_vector(resize(unsigned(ada_channels(6)), 32)));
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch7 , std_logic_vector(resize(unsigned(ada_channels(7)), 32)));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch0 , adc_scaled_channels(0));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch1 , adc_scaled_channels(1));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch2 , adc_scaled_channels(2));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch3 , adc_scaled_channels(3));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch4 , adc_scaled_channels(4));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch5 , adc_scaled_channels(5));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch6 , adc_scaled_channels(6));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_ada_ch7 , adc_scaled_channels(7));
 
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch0 , std_logic_vector(resize(unsigned(adb_channels(0)), 32)));
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch1 , std_logic_vector(resize(unsigned(adb_channels(1)), 32)));
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch2 , std_logic_vector(resize(unsigned(adb_channels(2)), 32)));
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch3 , std_logic_vector(resize(unsigned(adb_channels(3)), 32)));
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch4 , std_logic_vector(resize(unsigned(adb_channels(4)), 32)));
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch5 , std_logic_vector(resize(unsigned(adb_channels(5)), 32)));
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch6 , std_logic_vector(resize(unsigned(adb_channels(6)), 32)));
-				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch7 , std_logic_vector(resize(unsigned(adb_channels(7)), 32)));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch0 , adc_scaled_channels(8));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch1 , adc_scaled_channels(9));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch2 , adc_scaled_channels(10));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch3 , adc_scaled_channels(11));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch4 , adc_scaled_channels(12));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch5 , adc_scaled_channels(13));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch6 , adc_scaled_channels(14));
+				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_adb_ch7 , adc_scaled_channels(15));
 
 				init_ram(ram_a_in);
                 -- create_ads7056_driver(ad1,ada_data, ada_cs, ada_clock); 
@@ -611,27 +640,37 @@ begin
         );
 
 ------------------------------------------------------------------------
--- ada/adb continuous mux scan : request_measurement is asserted every
--- cycle, so muxed_adc's own busy-gating paces the scan at the hardware's
--- own max rate -- the instant a conversion completes, its result is
--- stored under the channel get_sampled_mux_pos says it actually belongs
--- to (not the channel currently being requested), and the next mux
--- position in the round-robin is requested
-        mux_scan : process(clk120Mhz)
+-- ada/adb continuous mux scan : muxed_adc_a_in/b_in are forwarded
+-- straight through adc_scale_pipeline to its internal muxed_adc
+-- instances, so (unlike the old direct-muxed_adc hookup) this can't see
+-- adc_ready to pace itself reactively -- a trigger is pulsed once per
+-- adc_scan_trigger_period instead, generously longer than one
+-- conversion+ram+dsp latency, so it's always safely idle by the time the
+-- next pulse fires. adc_scale_pipeline_out.channel already reports which
+-- of the 16 channels a given scaled result belongs to, so no separate
+-- per-adc tagging is needed here
+        adc_scan : process(clk120Mhz)
         begin
             if rising_edge(clk120Mhz) then
 
-                request_measurement(muxed_adc_a_in, ada_next_channel);
-                request_measurement(muxed_adc_b_in, adb_next_channel);
+                init_muxed_adc(muxed_adc_a_in);
+                init_muxed_adc(muxed_adc_b_in);
 
-                if adc_ready(muxed_adc_a_out) then
-                    ada_channels(to_integer(unsigned(get_sampled_mux_pos(muxed_adc_a_out)))) <= get_adc_result(muxed_adc_a_out);
-                    ada_next_channel <= std_logic_vector(unsigned(ada_next_channel) + 1);
+                if adc_scan_trigger_counter < adc_scan_trigger_period-1 then
+                    adc_scan_trigger_counter <= adc_scan_trigger_counter + 1;
+                else
+                    adc_scan_trigger_counter <= 0;
                 end if;
 
-                if adc_ready(muxed_adc_b_out) then
-                    adb_channels(to_integer(unsigned(get_sampled_mux_pos(muxed_adc_b_out)))) <= get_adc_result(muxed_adc_b_out);
+                if adc_scan_trigger_counter = 0 then
+                    request_measurement(muxed_adc_a_in, ada_next_channel);
+                    request_measurement(muxed_adc_b_in, adb_next_channel);
+                    ada_next_channel <= std_logic_vector(unsigned(ada_next_channel) + 1);
                     adb_next_channel <= std_logic_vector(unsigned(adb_next_channel) + 1);
+                end if;
+
+                if adc_ready(adc_scale_pipeline_out) then
+                    adc_scaled_channels(to_integer(unsigned(get_channel(adc_scale_pipeline_out)))) <= get_scaled_value(adc_scale_pipeline_out);
                 end if;
 
             end if;
