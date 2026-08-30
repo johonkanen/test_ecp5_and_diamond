@@ -4,6 +4,7 @@ LIBRARY ieee  ;
 
     use work.dual_port_ram_pkg.all;
     use work.muxed_adc_pkg.all;
+    use work.fpga_interconnect_pkg.all;
     use work.adc_scale_pipeline_pkg.all;
 
 library vunit_lib;
@@ -74,12 +75,33 @@ architecture vunit_simulation of adc_scale_pipeline_tb is
         ,14 => std_logic_vector(to_signed(1000,  16)), 15 => std_logic_vector(to_signed(1500,  16))
     );
 
+    -- signals, not constants : bus_test below overwrites channel
+    -- bus_test_channel's gain/offset through port b (the same underlying
+    -- memory ada/adb's own port a scans read from), so the expected
+    -- value for that one channel changes partway through the simulation
     type expected_array is array (0 to 7) of integer;
-    constant expected_ada : expected_array := (1100, 2200, 3300, 4400, 5500, 6600, 7700, 8800);
-    constant expected_adb : expected_array := (-500, 1500, 3500, 5500, 7500, 9500, 11500, 13500);
+    signal expected_ada : expected_array := (1100, 2200, 3300, 4400, 5500, 6600, 7700, 8800);
+    signal expected_adb : expected_array := (-500, 1500, 3500, 5500, 7500, 9500, 11500, 13500);
 
     type checked_array is array (0 to 15) of boolean;
     signal checked : checked_array := (others => false);
+
+    -- arbitrary, non-overlapping bus addresses for port b access to both
+    -- rams, exercised by bus_test below
+    constant gain_ram_read_address     : natural := 0;
+    constant gain_ram_write_address    : natural := 100;
+    constant gain_ram_readback_address : natural := 200;
+
+    constant offset_ram_read_address     : natural := 300;
+    constant offset_ram_write_address    : natural := 400;
+    constant offset_ram_readback_address : natural := 500;
+
+    constant bus_test_channel   : natural := 3;
+    constant bus_test_new_gain  : integer := 5000;
+    constant bus_test_new_offset : integer := -750;
+
+    signal bus_test_gain_done   : boolean := false;
+    signal bus_test_offset_done : boolean := false;
 
     signal simulator_clock : std_logic := '0';
 
@@ -122,6 +144,8 @@ begin
             end if;
         end loop;
         check(all_checked, "not every one of the 16 channels was observed within the simulation window");
+        check(bus_test_gain_done, "gain ram port b read/write over fpga_interconnect never completed");
+        check(bus_test_offset_done, "offset ram port b read/write over fpga_interconnect never completed");
 
         test_runner_cleanup(runner); -- Simulation ends here
         wait;
@@ -155,6 +179,55 @@ begin
 
         end if; -- rising_edge
     end process stimulus;
+------------------------------------------------------------------------
+
+    -- exercises port b of both rams over fpga_interconnect : writes a new
+    -- value to one channel, then requests it back and checks the
+    -- readback matches -- proving the host path actually reaches the ram
+    -- and back, independent of ada/adb's own port a scanning
+    bus_test : process(simulator_clock)
+        variable cycle : natural := 0;
+    begin
+        if rising_edge(simulator_clock) then
+
+            init_bus(bus_to_adc_scaler);
+            cycle := cycle + 1;
+
+            -- write_data_to_address's integer overload feeds numeric_std's
+            -- to_unsigned, which can't take a negative value ; use the
+            -- std_logic_vector overload (via to_signed) for the offset
+            -- instead, and interpret readbacks as signed 16 bit for the
+            -- same reason (the ram's 16 bit value only zero-extends into
+            -- the 32 bit bus word, it isn't sign-extended)
+            if cycle = 30 then
+                write_data_to_address(bus_to_adc_scaler, gain_ram_write_address + bus_test_channel, bus_test_new_gain);
+            elsif cycle = 35 then
+                write_data_to_address(bus_to_adc_scaler, offset_ram_write_address + bus_test_channel, std_logic_vector(to_signed(bus_test_new_offset, 16)));
+            elsif cycle = 36 then
+                -- port b writes land in the same memory ada's own port a
+                -- scan reads from, so channel bus_test_channel's expected
+                -- value changes from here on
+                expected_ada(bus_test_channel) <= bus_test_new_gain/2 + bus_test_new_offset;
+            elsif cycle = 40 then
+                request_data_from_address(bus_to_adc_scaler, gain_ram_read_address + bus_test_channel);
+            elsif cycle = 45 then
+                request_data_from_address(bus_to_adc_scaler, offset_ram_read_address + bus_test_channel);
+            end if;
+
+            if write_is_requested_to_address(bus_from_adc_scaler, gain_ram_readback_address) then
+                check(to_integer(signed(get_slv_data(bus_from_adc_scaler)(15 downto 0))) = bus_test_new_gain,
+                    "gain ram port b readback mismatch, got " & integer'image(to_integer(signed(get_slv_data(bus_from_adc_scaler)(15 downto 0)))));
+                bus_test_gain_done <= true;
+            end if;
+
+            if write_is_requested_to_address(bus_from_adc_scaler, offset_ram_readback_address) then
+                check(to_integer(signed(get_slv_data(bus_from_adc_scaler)(15 downto 0))) = bus_test_new_offset,
+                    "offset ram port b readback mismatch, got " & integer'image(to_integer(signed(get_slv_data(bus_from_adc_scaler)(15 downto 0)))));
+                bus_test_offset_done <= true;
+            end if;
+
+        end if; -- rising_edge
+    end process bus_test;
 ------------------------------------------------------------------------
 
     check_results : process(simulator_clock)
@@ -218,6 +291,12 @@ begin
         ,g_mux_switch_delay_in_clocks => 20
         ,g_gain_values   => gain_values
         ,g_offset_values => offset_values
+        ,g_gain_ram_read_address      => gain_ram_read_address
+        ,g_gain_ram_write_address     => gain_ram_write_address
+        ,g_gain_ram_readback_address  => gain_ram_readback_address
+        ,g_offset_ram_read_address     => offset_ram_read_address
+        ,g_offset_ram_write_address    => offset_ram_write_address
+        ,g_offset_ram_readback_address => offset_ram_readback_address
     )
     port map(
         clock    => simulator_clock

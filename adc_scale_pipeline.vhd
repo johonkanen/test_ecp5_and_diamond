@@ -44,6 +44,7 @@ library ieee;
     use work.dual_port_ram_pkg.all;
     use work.muxed_adc_pkg.all;
     use work.fixed_dsp_pkg.all;
+    use work.fpga_interconnect_pkg.all;
     use work.adc_scale_pipeline_pkg.all;
 
 -- owns both muxed_adc instances (their physical pins are ports of this
@@ -57,11 +58,15 @@ library ieee;
 --
 -- one dpram holds every channel's gain, the other every channel's
 -- offset : address 0..7 is ada's channels 0..7, address 8..15 is adb's.
--- only port a of each is used (port b is left unused for now) so ada and
--- adb take turns reading, arbitrated with fixed priority (ada first) at
--- the point they request a lookup -- since that already serializes them
--- to at most one ram request in flight at a time, no separate
--- arbitration is needed later at the shared fixed_dsp
+-- port a of each is dedicated to ada/adb's own scanning (arbitrated with
+-- fixed priority, ada first, at the point they request a lookup -- since
+-- that already serializes them to at most one ram request in flight at a
+-- time, no separate arbitration is needed later at the shared
+-- fixed_dsp). port b of each is exposed on bus_to_adc_scaler /
+-- bus_from_adc_scaler instead, so a host can read or write any channel's
+-- calibration values live, the same way top.vhd's own dpram exposes
+-- ram_a/ram_b over fpga_interconnect : a 16-address read window and a
+-- 16-address write window per ram, plus one fixed readback address each
 entity adc_scale_pipeline is
     generic(
         g_radix : natural := 15
@@ -73,6 +78,14 @@ entity adc_scale_pipeline is
 
         ;g_gain_values   : work.dual_port_ram_pkg.ram_array
         ;g_offset_values : work.dual_port_ram_pkg.ram_array
+
+        ;g_gain_ram_read_address     : natural
+        ;g_gain_ram_write_address    : natural
+        ;g_gain_ram_readback_address : natural
+
+        ;g_offset_ram_read_address     : natural
+        ;g_offset_ram_write_address    : natural
+        ;g_offset_ram_readback_address : natural
     );
     port(
         clock : in std_logic
@@ -108,17 +121,18 @@ architecture rtl of adc_scale_pipeline is
         datawidth     => 16
         ,addresswidth => 4);
 
-    -- port a is the only port used on either ram ; port b's input is
-    -- wired to a permanently idle constant (never requested) and its
-    -- output goes nowhere (an unconstrained record port can't be left
-    -- truly open, so it still needs a signal to bind to)
+    -- port a of each ram is dedicated to ada/adb's own scanning
     signal gain_ram_in    : dp_ram_subtype.ram_in'subtype  := dp_ram_subtype.ram_in;
     signal gain_ram_out   : dp_ram_subtype.ram_out'subtype;
     signal offset_ram_in  : dp_ram_subtype.ram_in'subtype  := dp_ram_subtype.ram_in;
     signal offset_ram_out : dp_ram_subtype.ram_out'subtype;
 
-    signal gain_ram_unused_out   : dp_ram_subtype.ram_out'subtype;
-    signal offset_ram_unused_out : dp_ram_subtype.ram_out'subtype;
+    -- port b of each ram is exposed to the host via bus_to_adc_scaler /
+    -- bus_from_adc_scaler
+    signal gain_ram_b_in    : dp_ram_subtype.ram_in'subtype  := dp_ram_subtype.ram_in;
+    signal gain_ram_b_out   : dp_ram_subtype.ram_out'subtype;
+    signal offset_ram_b_in  : dp_ram_subtype.ram_in'subtype  := dp_ram_subtype.ram_in;
+    signal offset_ram_b_out : dp_ram_subtype.ram_out'subtype;
 
     signal fixed_dsp_in  : fixed_dsp_in_record(
         a(dsp_word_length-1 downto 0)
@@ -200,11 +214,11 @@ begin
 
     u_dpram_gain : entity work.dual_port_ram
     generic map(g_dpram_subtype => dp_ram_subtype, g_ram_init_values => g_gain_values)
-    port map(clock, gain_ram_in, gain_ram_out, dp_ram_subtype.ram_in, gain_ram_unused_out);
+    port map(clock, gain_ram_in, gain_ram_out, gain_ram_b_in, gain_ram_b_out);
 
     u_dpram_offset : entity work.dual_port_ram
     generic map(g_dpram_subtype => dp_ram_subtype, g_ram_init_values => g_offset_values)
-    port map(clock, offset_ram_in, offset_ram_out, dp_ram_subtype.ram_in, offset_ram_unused_out);
+    port map(clock, offset_ram_in, offset_ram_out, offset_ram_b_in, offset_ram_b_out);
 
     u_fixed_dsp : entity work.fixed_dsp
     port map(
@@ -212,6 +226,46 @@ begin
         ,fixed_dsp_in  => fixed_dsp_in
         ,fixed_dsp_out => fixed_dsp_out
     );
+
+    -- host access to port b of both rams, mirroring top.vhd's own
+    -- dpram-over-fpga_interconnect pattern : a read request at an address
+    -- in the read window is answered later at the fixed readback
+    -- address, once the ram reports it ready ; a write at an address in
+    -- the write window lands immediately
+    bus_interface : process(clock)
+    begin
+        if rising_edge(clock) then
+
+            init_bus(bus_from_adc_scaler);
+            init_ram(gain_ram_b_in);
+            init_ram(offset_ram_b_in);
+
+            if data_is_requested_from_address_range(bus_to_adc_scaler, g_gain_ram_read_address, g_gain_ram_read_address+16) then
+                request_data_from_ram(gain_ram_b_in, get_address(bus_to_adc_scaler) - g_gain_ram_read_address);
+            end if;
+
+            if ram_read_is_ready(gain_ram_b_out) then
+                write_data_to_address(bus_from_adc_scaler, g_gain_ram_readback_address, get_ram_data(gain_ram_b_out));
+            end if;
+
+            if write_is_requested_to_address_range(bus_to_adc_scaler, g_gain_ram_write_address, g_gain_ram_write_address+16) then
+                write_data_to_ram(gain_ram_b_in, get_address(bus_to_adc_scaler) - g_gain_ram_write_address, get_slv_data(bus_to_adc_scaler)(15 downto 0));
+            end if;
+
+            if data_is_requested_from_address_range(bus_to_adc_scaler, g_offset_ram_read_address, g_offset_ram_read_address+16) then
+                request_data_from_ram(offset_ram_b_in, get_address(bus_to_adc_scaler) - g_offset_ram_read_address);
+            end if;
+
+            if ram_read_is_ready(offset_ram_b_out) then
+                write_data_to_address(bus_from_adc_scaler, g_offset_ram_readback_address, get_ram_data(offset_ram_b_out));
+            end if;
+
+            if write_is_requested_to_address_range(bus_to_adc_scaler, g_offset_ram_write_address, g_offset_ram_write_address+16) then
+                write_data_to_ram(offset_ram_b_in, get_address(bus_to_adc_scaler) - g_offset_ram_write_address, get_slv_data(bus_to_adc_scaler)(15 downto 0));
+            end if;
+
+        end if;
+    end process bus_interface;
 
     adc_scale_pipeline_out.ready_with_1 <= fixed_dsp_out.ready_with_1;
     adc_scale_pipeline_out.channel      <= scaling_pipeline(scaling_pipeline_depth-1)(scaling_pipeline_width-1 downto 16);
