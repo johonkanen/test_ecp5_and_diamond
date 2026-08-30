@@ -54,7 +54,7 @@ proc add_vhdl_file_to_library {vhdl_file library} {
 
 
 # crashes the build if not instantiated
-# add_vhdl_file_to_project $path_to_this_file/fixed_dsp.vhd
+# add_vhdl_file_to_project $path_to_this_file/source/fixed_dsp.vhd
 
 add_vhdl_file_to_project $path_to_this_file/source/fpga_communication/hVHDL_uart/uart_rx/uart_rx_pkg.vhd
 add_vhdl_file_to_project $path_to_this_file/source/fpga_communication/hVHDL_uart/uart_tx/uart_tx_pkg.vhd
@@ -68,7 +68,7 @@ add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/s
 add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/source/hVHDL_memory_library/vhdl2008/mpram_w_configurable_records.vhd
 
 add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/vhdl2008/vhdl2008_microinstruction_pkg.vhd
-add_vhdl_file_to_project $path_to_this_file/microinstruction_pkg.vhd
+add_vhdl_file_to_project $path_to_this_file/source/microinstruction_pkg.vhd
 
 
 add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/source/hVHDL_fixed_point/fixed_dsp/fixed_dsp.vhd
@@ -84,18 +84,19 @@ add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/v
 add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/vhdl2008/instruction_pkg.vhd
 add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/vhdl2008/addsub.vhd
 
-add_vhdl_file_to_project $path_to_this_file/spi3w_ads7056_driver.vhd
-add_vhdl_file_to_project $path_to_this_file/muxed_adc.vhd
-add_vhdl_file_to_project $path_to_this_file/adc_scale_pipeline.vhd
+add_vhdl_file_to_project $path_to_this_file/source/spi3w_ads7056_driver.vhd
+add_vhdl_file_to_project $path_to_this_file/source/muxed_adc.vhd
+add_vhdl_file_to_project $path_to_this_file/source/adc_scale_pipeline.vhd
 
-add_vhdl_file_to_project $path_to_this_file/ecp5_real_to_fixed_pkg.vhd
-add_vhdl_file_to_project $path_to_this_file/arch_ecp_dsp_instruction.vhd
-add_vhdl_file_to_project $path_to_this_file/test_processor.vhd
-add_vhdl_file_to_project $path_to_this_file/arch_processor.vhd
+add_vhdl_file_to_project $path_to_this_file/source/ecp5_real_to_fixed_pkg.vhd
+add_vhdl_file_to_project $path_to_this_file/source/arch_ecp_dsp_instruction.vhd
+add_vhdl_file_to_project $path_to_this_file/source/test_processor.vhd
+add_vhdl_file_to_project $path_to_this_file/source/arch_processor.vhd
 # end microprogram processor modules
 
-add_vhdl_file_to_project $path_to_this_file/address_pkg.vhd
-add_vhdl_file_to_project $path_to_this_file/top.vhd
+add_vhdl_file_to_project $path_to_this_file/source/address_pkg.vhd
+add_vhdl_file_to_project $path_to_this_file/source/rgb_led.vhd
+add_vhdl_file_to_project $path_to_this_file/source/top.vhd
 
 prj_src add -exclude $path_to_this_file/ecp5_compile.lpf
 prj_src enable $path_to_this_file/ecp5_compile.lpf

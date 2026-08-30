@@ -38,7 +38,7 @@ def to_signed32(value):
     value = np.where(value >= 2**31, value - 2**32, value)
     return value.item() if value.ndim == 0 else value
 
-# single-register bus addresses live in address_pkg.vhd as
+# single-register bus addresses live in source/address_pkg.vhd as
 # "constant address_<name> : natural := <value>;" -- parse them straight
 # out of that file so the register dump can't drift out of sync with top.vhd
 def load_registers(vhd_path):
@@ -47,7 +47,7 @@ def load_registers(vhd_path):
         matches = pattern.findall(f.read())
     return dict(sorted((int(address), name) for name, address in matches))
 
-registers = load_registers(os.path.join(abs_path, "address_pkg.vhd"))
+registers = load_registers(os.path.join(abs_path, "source", "address_pkg.vhd"))
 sine_result_address = next(address for address, name in registers.items() if name == "sine_result")
 adc_channel_addresses = {name: address for address, name in registers.items()
     if name.startswith("ada_ch") or name.startswith("adb_ch")}

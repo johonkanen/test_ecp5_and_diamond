@@ -69,7 +69,12 @@ library ieee;
 -- 16-address write window per ram, plus one fixed readback address each
 entity adc_scale_pipeline is
     generic(
-        g_radix : natural := 15
+        -- gain and offset are 32-bit signed values at this radix
+        -- (make them with real_to_fixed_pkg.to_fixed(x, 32, g_radix)) ;
+        -- raw is an integer count (radix 0), so raw*gain lands at this
+        -- radix, offset is added at the same radix, and scaled_value is
+        -- that sum shifted back down by g_radix
+        g_radix : natural := 20
 
         ;g_u8_clk_cnt                 : integer := 2
         ;g_u8_clks_per_conversion     : integer := 18
@@ -118,7 +123,7 @@ architecture rtl of adc_scale_pipeline is
     signal muxed_adc_b_out : muxed_adc_out_record;
 
     constant dp_ram_subtype : dpram_ref_record := create_ref_subtypes(
-        datawidth     => 16
+        datawidth     => 32
         ,addresswidth => 4);
 
     -- port a of each ram is dedicated to ada/adb's own scanning
@@ -186,6 +191,21 @@ architecture rtl of adc_scale_pipeline is
     type scaling_pipeline_array is array (0 to scaling_pipeline_depth-1) of std_logic_vector(scaling_pipeline_width-1 downto 0);
     signal scaling_pipeline : scaling_pipeline_array := (others => (others => '0'));
 
+    -- g_gain_values / g_offset_values cannot be relied on as power-up ram
+    -- contents : Synplify does not carry these array generics across
+    -- adc_scale_pipeline's own generic boundary into the inner
+    -- dual_port_ram's init (the map report shows every INITVAL_* of
+    -- u_dpram_gain / u_dpram_offset as zero, while top.vhd's directly
+    -- instantiated dpram keeps its init). an all-zero gain ram makes
+    -- every scaled result raw*0 = 0, which is exactly the "all channels
+    -- read zero" symptom. so the defaults are instead written into both
+    -- rams over port a during the first 16 clocks after power-up, before
+    -- the scan is allowed to request anything -- the mux switch delay
+    -- alone is longer than that, so no conversion can complete first
+    constant last_channel_address : natural := 15;
+    signal startup_write_address  : natural range 0 to last_channel_address := 0;
+    signal startup_complete       : std_logic := '0';
+
 begin
 
     u_muxed_adc_a : entity work.muxed_adc
@@ -249,7 +269,7 @@ begin
             end if;
 
             if write_is_requested_to_address_range(bus_to_adc_scaler, g_gain_ram_write_address, g_gain_ram_write_address+16) then
-                write_data_to_ram(gain_ram_b_in, get_address(bus_to_adc_scaler) - g_gain_ram_write_address, get_slv_data(bus_to_adc_scaler)(15 downto 0));
+                write_data_to_ram(gain_ram_b_in, get_address(bus_to_adc_scaler) - g_gain_ram_write_address, get_slv_data(bus_to_adc_scaler));
             end if;
 
             if data_is_requested_from_address_range(bus_to_adc_scaler, g_offset_ram_read_address, g_offset_ram_read_address+16) then
@@ -261,7 +281,7 @@ begin
             end if;
 
             if write_is_requested_to_address_range(bus_to_adc_scaler, g_offset_ram_write_address, g_offset_ram_write_address+16) then
-                write_data_to_ram(offset_ram_b_in, get_address(bus_to_adc_scaler) - g_offset_ram_write_address, get_slv_data(bus_to_adc_scaler)(15 downto 0));
+                write_data_to_ram(offset_ram_b_in, get_address(bus_to_adc_scaler) - g_offset_ram_write_address, get_slv_data(bus_to_adc_scaler));
             end if;
 
         end if;
@@ -343,13 +363,18 @@ begin
             -- is exactly what the ram is reporting ready right now
             if ram_read_is_ready(gain_ram_out) then
 
+                -- raw (radix 0) * gain (radix g_radix) = product at radix
+                -- g_radix ; offset is stored at that same radix, so it is
+                -- sign-extended into the product width and added directly,
+                -- with no shift of its own
                 add(fixed_dsp_in
                     ,a => resize(signed('0' & scaling_pipeline(ram_latency-1)(15 downto 0)), dsp_word_length)
                     ,b => resize(signed(get_ram_data(gain_ram_out)), dsp_word_length)
-                    ,c => shift_left(resize(signed(get_ram_data(offset_ram_out)), 2*dsp_word_length), g_radix)
+                    ,c => resize(signed(get_ram_data(offset_ram_out)), 2*dsp_word_length)
                 );
 
             end if;
+
 
         end if;
     end process;

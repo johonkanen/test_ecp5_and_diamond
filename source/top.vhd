@@ -224,6 +224,7 @@ architecture behavioral of top is
     use work.muxed_adc_pkg.all;
     use work.adc_scale_pipeline_pkg.all;
     use work.address_pkg.all;
+    use work.real_to_fixed_pkg.all;
 
     signal muxed_adc_a_in : muxed_adc_in_record := init_muxed_adc_in;
     signal muxed_adc_b_in : muxed_adc_in_record := init_muxed_adc_in;
@@ -242,12 +243,12 @@ architecture behavioral of top is
     signal bus_to_adc_scaler      : work.fpga_interconnect_pkg.fpga_interconnect_record;
     signal bus_from_adc_scaler    : work.fpga_interconnect_pkg.fpga_interconnect_record;
 
-    -- default calibration : gain ~1.0 (32767 is the closest a signed
-    -- q1.15 fraction gets, since exactly 1.0 doesn't fit), offset 0 --
-    -- an identity scaling, until a host calibrates real values in over
-    -- bus_to_adc_scaler/bus_from_adc_scaler
-    constant adc_scaler_default_gain   : work.dual_port_ram_pkg.ram_array(0 to 15)(15 downto 0) := (others => std_logic_vector(to_signed(32767, 16)));
-    constant adc_scaler_default_offset : work.dual_port_ram_pkg.ram_array(0 to 15)(15 downto 0) := (others => (others => '0'));
+    -- default calibration : identity scaling (gain 1.0, offset 0), as
+    -- 32-bit signed values at radix adc_scaler_radix, until a host
+    -- calibrates real values in over bus_to_adc_scaler/bus_from_adc_scaler
+    constant adc_scaler_radix : natural := 20;
+    constant adc_scaler_default_gain   : work.dual_port_ram_pkg.ram_array(0 to 15)(31 downto 0) := (others => to_fixed(1.0, 32, adc_scaler_radix));
+    constant adc_scaler_default_offset : work.dual_port_ram_pkg.ram_array(0 to 15)(31 downto 0) := (others => to_fixed(0.0, 32, adc_scaler_radix));
     ------------------------------------------------------------------------
 	
     use work.fixed_dsp_pkg.all;
@@ -301,7 +302,7 @@ begin
     ------------------------------------------------------------------------
     u_adc_scale_pipeline : entity work.adc_scale_pipeline
         generic map(
-            g_radix => 15
+            g_radix => adc_scaler_radix
             ,g_u8_clk_cnt => 2
             ,g_u8_clks_per_conversion => 18
             ,g_sh_counter_latch => 9
@@ -475,7 +476,21 @@ begin
 
        -- rgb_led1 <= (others => '0');
         --rgb_led2 <= (others => '0');
-        rgb_led3 <= (others => '1');
+
+        -- rgb_led3 was unused ; drive it with the rgb_led module and
+        -- blink its blue channel (bit 2) at ~85% pwm duty. red/green are
+        -- pinned off with a threshold of g_pwm_max+1.
+        u_rgb_led3 : entity work.rgb_led
+        generic map(
+            g_blink_half_period => 60e6      -- ~1 Hz blink at 120 MHz
+            ,g_pwm_max          => 2**15 - 1
+            ,g_active_bit       => 2          -- blue
+        )
+        port map(
+            clock          => clk120Mhz
+            ,pwm_thresholds => (0 => 2**15, 1 => 2**15, 2 => 2**15 * 85 / 100)
+            ,rgb_led        => rgb_led3
+        );
 		
 ---------------------------------------------------
 		u_communications : entity work.fpga_communications

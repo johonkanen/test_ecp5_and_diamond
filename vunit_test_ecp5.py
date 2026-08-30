@@ -71,10 +71,10 @@ v2008.add_source_files(ROOT / MPROC / "testbenches/vhdl2008/float_microprocessor
 v2008.add_source_files(ROOT / "source/fpga_communication/hVHDL_fpga_interconnect/fpga_interconnect_generic_pkg.vhd")
 v2008.add_source_files(ROOT / "source/fpga_communication/fpga_interconnect_16bit_pkg.vhd")
 
-v2008.add_source_files(ROOT / "sim_mpy32x32.vhd")
-v2008.add_source_files(ROOT / "test_processor.vhd")
-v2008.add_source_files(ROOT / "arch_processor.vhd")
-v2008.add_source_files(ROOT / "arch_ecp_dsp_instruction.vhd")
+v2008.add_source_files(ROOT / "source" / "sim_mpy32x32.vhd")
+v2008.add_source_files(ROOT / "source" / "test_processor.vhd")
+v2008.add_source_files(ROOT / "source" / "arch_processor.vhd")
+v2008.add_source_files(ROOT / "source" / "arch_ecp_dsp_instruction.vhd")
 
 v2008.add_source_files(ROOT / "testbenches/mpy_32x32_tb.vhd")
 # fixed_dsp's own testbench (both the rtl and ecp5 architectures) now lives
@@ -84,13 +84,13 @@ v2008.add_source_files(ROOT / "testbenches/mpy_32x32_tb.vhd")
 
 v2008.add_source_files(ROOT / "testbenches/ecp5_microprocessor_tb.vhd")
 
-v2008.add_source_files(ROOT / "spi3w_ads7056_driver.vhd")
+v2008.add_source_files(ROOT / "source" / "spi3w_ads7056_driver.vhd")
 v2008.add_source_files(ROOT / "testbenches/ads7056_entity_tb.vhd")
 
-v2008.add_source_files(ROOT / "muxed_adc.vhd")
+v2008.add_source_files(ROOT / "source" / "muxed_adc.vhd")
 v2008.add_source_files(ROOT / "testbenches/muxed_adc_tb.vhd")
 
-v2008.add_source_files(ROOT / "adc_scale_pipeline.vhd")
+v2008.add_source_files(ROOT / "source" / "adc_scale_pipeline.vhd")
 v2008.add_source_files(ROOT / "testbenches/adc_scale_pipeline_tb.vhd")
 
 v2008.add_source_files(ROOT / "testbenches/dab_modulator_tb.vhd")
@@ -99,7 +99,7 @@ v2008.add_source_files(ROOT / "testbenches/dab_modulator_tb.vhd")
 # inline rgb-led processes in top.vhd (top.vhd:388-443) into an entity.
 # the testbench runs it against an independent reference model ; counter
 # sizes are generics so the sim runs in microseconds instead of 60e6 counts.
-v2008.add_source_files(ROOT / "rgb_led.vhd")
+v2008.add_source_files(ROOT / "source" / "rgb_led.vhd")
 v2008.add_source_files(ROOT / "testbenches/rgb_led_blinker_tb.vhd")
 rgb_led_blinker_tb = v2008.test_bench("rgb_led_blinker_tb")
 # one pwm threshold per rgb-led io. 256 (= g_pwm_max+1) pins a channel

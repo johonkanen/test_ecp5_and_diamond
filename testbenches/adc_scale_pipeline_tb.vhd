@@ -6,6 +6,7 @@ LIBRARY ieee  ;
     use work.muxed_adc_pkg.all;
     use work.fpga_interconnect_pkg.all;
     use work.adc_scale_pipeline_pkg.all;
+    use work.real_to_fixed_pkg.all;
 
 library vunit_lib;
 context vunit_lib.vunit_context;
@@ -16,6 +17,14 @@ context vunit_lib.vunit_context;
 -- (scaled = raw*gain + offset), and the result comes back tagged with
 -- the right one of the 16 channels.
 --
+-- note: adc_scale_pipeline writes g_gain_values/g_offset_values into its
+-- rams over the first 16 clocks (the generic ram init does not survive
+-- ecp5 synthesis across its generic boundary). in simulation the ram
+-- model also honours the generic init, so both paths land the same
+-- contents here -- this bench can't tell a broken startup writer from a
+-- working one, it only proves the 16-clock startup gate doesn't deadlock
+-- the pipeline. the startup writer is what actually matters on hardware.
+--
 -- both fake ads7056 slaves (u_ada_slave/u_adb_slave, the same
 -- falling_edge(ad_cs)-loads / rising_edge(ad_clock)-shifts loopback
 -- technique used by testbenches/ads7056_entity_tb.vhd and
@@ -24,10 +33,11 @@ context vunit_lib.vunit_context;
 -- mux-position tagging was already verified bit-exactly in
 -- muxed_adc_tb.vhd, so this testbench trusts whichever channel
 -- adc_scale_pipeline reports and checks only what it is responsible for :
--- that channel's gain/offset lookup and fmac scaling. raw and every gain
--- are chosen so the fixed-point math has no rounding to worry about
--- (raw = 2**14, every gain a multiple of 2, so raw*gain is always an
--- exact multiple of 2**radix), so the expected results below are exact.
+-- that channel's gain/offset lookup and fmac scaling. gain and offset are
+-- 32-bit signed values at radix 20 (built here with real_to_fixed_pkg's
+-- to_fixed) ; every gain and offset is a multiple of 0.25 and raw is
+-- 2**14, so raw*gain + offset is exact at radix 20 and the expected
+-- results below have no rounding.
 entity adc_scale_pipeline_tb is
     generic (runner_cfg : string);
 end;
@@ -46,42 +56,49 @@ architecture vunit_simulation of adc_scale_pipeline_tb is
     -- visibility, matching testbenches/muxed_adc_tb.vhd's own approach
     constant trigger_period : natural := 80;
 
-    constant raw_pattern : std_logic_vector(15 downto 0) := x"4000"; -- 16384 = 2**14
+    constant scaler_radix : natural := 20;
+    constant raw_pattern  : std_logic_vector(15 downto 0) := x"4000"; -- 16384 = 2**14
+    constant raw_value    : real := 16384.0;
 
-    -- address 0..7 = ada's channels 0..7, address 8..15 = adb's
-    -- ada : gain(ch) = (ch+1)*2000, offset(ch) = (ch+1)*100
-    -- adb : gain(ch) = (ch+1)*3000, offset(ch) = (ch-4)*500 (includes
-    -- negative offsets, so the pipeline's sign handling gets exercised too)
-    -- expected(ch) = gain(ch)/2 + offset(ch)
-    constant gain_values : work.dual_port_ram_pkg.ram_array(0 to 15)(15 downto 0) := (
-        0  => std_logic_vector(to_signed(2000,  16)), 1  => std_logic_vector(to_signed(4000,  16))
-        ,2  => std_logic_vector(to_signed(6000,  16)), 3  => std_logic_vector(to_signed(8000,  16))
-        ,4  => std_logic_vector(to_signed(10000, 16)), 5  => std_logic_vector(to_signed(12000, 16))
-        ,6  => std_logic_vector(to_signed(14000, 16)), 7  => std_logic_vector(to_signed(16000, 16))
-        ,8  => std_logic_vector(to_signed(3000,  16)), 9  => std_logic_vector(to_signed(6000,  16))
-        ,10 => std_logic_vector(to_signed(9000,  16)), 11 => std_logic_vector(to_signed(12000, 16))
-        ,12 => std_logic_vector(to_signed(15000, 16)), 13 => std_logic_vector(to_signed(18000, 16))
-        ,14 => std_logic_vector(to_signed(21000, 16)), 15 => std_logic_vector(to_signed(24000, 16))
-    );
+    -- address 0..7 = ada's channels 0..7, address 8..15 = adb's.
+    -- adb offsets go negative so the fmac's sign handling is exercised.
+    -- expected(ch) = raw*gain(ch) + offset(ch)
+    type real_array is array (0 to 15) of real;
+    constant gain_real_values : real_array := (
+        0 => 1.0, 1 => 1.5,  2 => 2.0, 3 => 2.5,  4 => 3.0, 5 => 3.5,  6 => 4.0, 7 => 4.5,
+        8 => 1.0, 9 => 1.25, 10 => 1.5, 11 => 1.75, 12 => 2.0, 13 => 2.25, 14 => 2.5, 15 => 2.75);
+    constant offset_real_values : real_array := (
+        0 => 100.0,  1 => 200.0,  2 => 300.0,  3 => 400.0,  4 => 500.0, 5 => 600.0, 6 => 700.0, 7 => 800.0,
+        8 => -800.0, 9 => -600.0, 10 => -400.0, 11 => -200.0, 12 => 0.0, 13 => 200.0, 14 => 400.0, 15 => 600.0);
 
-    constant offset_values : work.dual_port_ram_pkg.ram_array(0 to 15)(15 downto 0) := (
-        0  => std_logic_vector(to_signed(100, 16)), 1  => std_logic_vector(to_signed(200, 16))
-        ,2  => std_logic_vector(to_signed(300, 16)), 3  => std_logic_vector(to_signed(400, 16))
-        ,4  => std_logic_vector(to_signed(500, 16)), 5  => std_logic_vector(to_signed(600, 16))
-        ,6  => std_logic_vector(to_signed(700, 16)), 7  => std_logic_vector(to_signed(800, 16))
-        ,8  => std_logic_vector(to_signed(-2000, 16)), 9  => std_logic_vector(to_signed(-1500, 16))
-        ,10 => std_logic_vector(to_signed(-1000, 16)), 11 => std_logic_vector(to_signed(-500,  16))
-        ,12 => std_logic_vector(to_signed(0,     16)), 13 => std_logic_vector(to_signed(500,   16))
-        ,14 => std_logic_vector(to_signed(1000,  16)), 15 => std_logic_vector(to_signed(1500,  16))
-    );
+    function build_ram_values (reals : real_array) return work.dual_port_ram_pkg.ram_array is
+        variable retval : work.dual_port_ram_pkg.ram_array(0 to 15)(31 downto 0);
+    begin
+        for i in retval'range loop
+            retval(i) := to_fixed(reals(i), 32, scaler_radix);
+        end loop;
+        return retval;
+    end function;
+
+    constant gain_values   : work.dual_port_ram_pkg.ram_array(0 to 15)(31 downto 0) := build_ram_values(gain_real_values);
+    constant offset_values : work.dual_port_ram_pkg.ram_array(0 to 15)(31 downto 0) := build_ram_values(offset_real_values);
 
     -- signals, not constants : bus_test below overwrites channel
     -- bus_test_channel's gain/offset through port b (the same underlying
     -- memory ada/adb's own port a scans read from), so the expected
     -- value for that one channel changes partway through the simulation
     type expected_array is array (0 to 7) of integer;
-    signal expected_ada : expected_array := (1100, 2200, 3300, 4400, 5500, 6600, 7700, 8800);
-    signal expected_adb : expected_array := (-500, 1500, 3500, 5500, 7500, 9500, 11500, 13500);
+    function build_expected (base : natural) return expected_array is
+        variable retval : expected_array;
+    begin
+        for i in retval'range loop
+            retval(i) := integer(raw_value * gain_real_values(base + i) + offset_real_values(base + i));
+        end loop;
+        return retval;
+    end function;
+
+    signal expected_ada : expected_array := build_expected(0);
+    signal expected_adb : expected_array := build_expected(8);
 
     type checked_array is array (0 to 15) of boolean;
     signal checked : checked_array := (others => false);
@@ -96,9 +113,11 @@ architecture vunit_simulation of adc_scale_pipeline_tb is
     constant offset_ram_write_address    : natural := 400;
     constant offset_ram_readback_address : natural := 500;
 
-    constant bus_test_channel   : natural := 3;
-    constant bus_test_new_gain  : integer := 5000;
-    constant bus_test_new_offset : integer := -750;
+    constant bus_test_channel         : natural := 3;
+    constant bus_test_new_gain_real   : real := 3.25;
+    constant bus_test_new_offset_real : real := -300.0;
+    constant bus_test_new_gain   : std_logic_vector(31 downto 0) := to_fixed(bus_test_new_gain_real,   32, scaler_radix);
+    constant bus_test_new_offset : std_logic_vector(31 downto 0) := to_fixed(bus_test_new_offset_real, 32, scaler_radix);
 
     signal bus_test_gain_done   : boolean := false;
     signal bus_test_offset_done : boolean := false;
@@ -193,21 +212,18 @@ begin
             init_bus(bus_to_adc_scaler);
             cycle := cycle + 1;
 
-            -- write_data_to_address's integer overload feeds numeric_std's
-            -- to_unsigned, which can't take a negative value ; use the
-            -- std_logic_vector overload (via to_signed) for the offset
-            -- instead, and interpret readbacks as signed 16 bit for the
-            -- same reason (the ram's 16 bit value only zero-extends into
-            -- the 32 bit bus word, it isn't sign-extended)
+            -- gain and offset are full 32-bit signed bus words now, so
+            -- both go through write_data_to_address's std_logic_vector
+            -- overload and read straight back as signed 32 bit
             if cycle = 30 then
                 write_data_to_address(bus_to_adc_scaler, gain_ram_write_address + bus_test_channel, bus_test_new_gain);
             elsif cycle = 35 then
-                write_data_to_address(bus_to_adc_scaler, offset_ram_write_address + bus_test_channel, std_logic_vector(to_signed(bus_test_new_offset, 16)));
+                write_data_to_address(bus_to_adc_scaler, offset_ram_write_address + bus_test_channel, bus_test_new_offset);
             elsif cycle = 36 then
                 -- port b writes land in the same memory ada's own port a
                 -- scan reads from, so channel bus_test_channel's expected
                 -- value changes from here on
-                expected_ada(bus_test_channel) <= bus_test_new_gain/2 + bus_test_new_offset;
+                expected_ada(bus_test_channel) <= integer(raw_value * bus_test_new_gain_real + bus_test_new_offset_real);
             elsif cycle = 40 then
                 request_data_from_address(bus_to_adc_scaler, gain_ram_read_address + bus_test_channel);
             elsif cycle = 45 then
@@ -215,14 +231,14 @@ begin
             end if;
 
             if write_is_requested_to_address(bus_from_adc_scaler, gain_ram_readback_address) then
-                check(to_integer(signed(get_slv_data(bus_from_adc_scaler)(15 downto 0))) = bus_test_new_gain,
-                    "gain ram port b readback mismatch, got " & integer'image(to_integer(signed(get_slv_data(bus_from_adc_scaler)(15 downto 0)))));
+                check(signed(get_slv_data(bus_from_adc_scaler)) = signed(bus_test_new_gain),
+                    "gain ram port b readback mismatch, got " & integer'image(to_integer(signed(get_slv_data(bus_from_adc_scaler)))));
                 bus_test_gain_done <= true;
             end if;
 
             if write_is_requested_to_address(bus_from_adc_scaler, offset_ram_readback_address) then
-                check(to_integer(signed(get_slv_data(bus_from_adc_scaler)(15 downto 0))) = bus_test_new_offset,
-                    "offset ram port b readback mismatch, got " & integer'image(to_integer(signed(get_slv_data(bus_from_adc_scaler)(15 downto 0)))));
+                check(signed(get_slv_data(bus_from_adc_scaler)) = signed(bus_test_new_offset),
+                    "offset ram port b readback mismatch, got " & integer'image(to_integer(signed(get_slv_data(bus_from_adc_scaler)))));
                 bus_test_offset_done <= true;
             end if;
 
@@ -284,7 +300,7 @@ begin
 
     u_adc_scale_pipeline : entity work.adc_scale_pipeline
     generic map(
-        g_radix => 15
+        g_radix => scaler_radix
         ,g_u8_clk_cnt => 2
         ,g_u8_clks_per_conversion => 18
         ,g_sh_counter_latch => 9
