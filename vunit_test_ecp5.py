@@ -144,6 +144,20 @@ sqrt_calculator_tb = v2008.test_bench("sqrt_calculator_tb")
 sqrt_calculator_tb.add_config(name="continuous", generics=dict(use_gaps=False))
 sqrt_calculator_tb.add_config(name="gapped", generics=dict(use_gaps=True))
 
+# ---------------------------------------------------------------------
+# hVHDL_ode LC-filter simulation : a fixed-step RK4 time-domain model of
+# misc/emi_filter_model.qsch (the QSPICE EMI-filter schematic), built the
+# same way as source/hVHDL_ode/testbenches/template_tb.vhd. running it
+# here writes lc_filter_ode_tb.dat next to wherever this script is run ;
+# misc/run_lc_ode.py drives this same testbench and plots its transfer
+# function against misc/L1C1_resp.csv and the QSPICE .ac analysis.
+ODE = "source/hVHDL_ode"
+ode = VU.add_library("ode")
+ode.add_source_files(ROOT / ODE / "write_pkg.vhd")
+ode.add_source_files(ROOT / ODE / "ode_solvers/real_vector_pkg.vhd")
+ode.add_source_files(ROOT / ODE / "ode_solvers/ode_pkg.vhd")
+ode.add_source_files(ROOT / "misc/lc_filter_ode_tb.vhd")
+
 if args.dump_arrays:
     VU.set_sim_option("nvc.sim_flags", ["-w", "--dump-arrays"])
 
