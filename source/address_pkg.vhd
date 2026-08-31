@@ -43,17 +43,14 @@ package address_pkg is
     constant address_adb_ch7 : natural := 29;
 
     -- adc_scale_pipeline's host-facing port b access (live gain/offset
-    -- calibration read/write) : each _read/_write constant is the base
-    -- of its own 16-address window (one per channel, 0..7 = ada,
-    -- 8..15 = adb). a read of <read base + channel> triggers the port b
-    -- ram read and the value comes straight back on the request (top.vhd
-    -- points adc_scale_pipeline's readback at address_ram_a_readback,
-    -- the shared address-0 reply channel).
-    constant adc_scaler_gain_ram_read_address     : natural := 700;
-    constant adc_scaler_gain_ram_write_address    : natural := 720;
-
-    constant adc_scaler_offset_ram_read_address  : natural := 750;
-    constant adc_scaler_offset_ram_write_address : natural := 770;
+    -- calibration read/write) : each constant is the base of one
+    -- 16-address window (one address per channel, 0..7 = ada, 8..15 =
+    -- adb) that serves both reads and writes. a read of <base + channel>
+    -- triggers the port b ram read and the value comes straight back on
+    -- the address-0 reply channel (the same one address_ram_a_readback
+    -- uses) ; a write of <base + channel> updates that channel.
+    constant adc_scaler_gain_ram_address   : natural := 700;
+    constant adc_scaler_offset_ram_address : natural := 750;
 
     constant test_memory_address_low  : natural := 100;
     constant test_memory_address_high : natural := 611;

@@ -103,15 +103,11 @@ architecture vunit_simulation of adc_scale_pipeline_tb is
     type checked_array is array (0 to 15) of boolean;
     signal checked : checked_array := (others => false);
 
-    -- arbitrary, non-overlapping bus addresses for port b access to both
-    -- rams, exercised by bus_test below
-    constant gain_ram_read_address     : natural := 0;
-    constant gain_ram_write_address    : natural := 100;
-    constant gain_ram_readback_address : natural := 200;
-
-    constant offset_ram_read_address     : natural := 300;
-    constant offset_ram_write_address    : natural := 400;
-    constant offset_ram_readback_address : natural := 500;
+    -- one 16-address host window per ram (serves reads and writes) ;
+    -- reads come back on the shared address-0 reply channel
+    constant gain_ram_address   : natural := 100;
+    constant offset_ram_address : natural := 300;
+    constant reply_address      : natural := 0;
 
     constant bus_test_channel         : natural := 3;
     constant bus_test_new_gain_real   : real := 3.25;
@@ -203,7 +199,9 @@ begin
     -- exercises port b of both rams over fpga_interconnect : writes a new
     -- value to one channel, then requests it back and checks the
     -- readback matches -- proving the host path actually reaches the ram
-    -- and back, independent of ada/adb's own port a scanning
+    -- and back, independent of ada/adb's own port a scanning.
+    -- gain and offset both reply on address 0, so the readbacks are done
+    -- one at a time (gain first, then offset) the way a real host would.
     bus_test : process(simulator_clock)
         variable cycle : natural := 0;
     begin
@@ -212,34 +210,37 @@ begin
             init_bus(bus_to_adc_scaler);
             cycle := cycle + 1;
 
-            -- gain and offset are full 32-bit signed bus words now, so
-            -- both go through write_data_to_address's std_logic_vector
-            -- overload and read straight back as signed 32 bit
+            -- gain and offset are full 32-bit signed bus words, through
+            -- write_data_to_address's std_logic_vector overload, read
+            -- straight back as signed 32 bit
             if cycle = 30 then
-                write_data_to_address(bus_to_adc_scaler, gain_ram_write_address + bus_test_channel, bus_test_new_gain);
+                write_data_to_address(bus_to_adc_scaler, gain_ram_address + bus_test_channel, bus_test_new_gain);
             elsif cycle = 35 then
-                write_data_to_address(bus_to_adc_scaler, offset_ram_write_address + bus_test_channel, bus_test_new_offset);
+                write_data_to_address(bus_to_adc_scaler, offset_ram_address + bus_test_channel, bus_test_new_offset);
             elsif cycle = 36 then
                 -- port b writes land in the same memory ada's own port a
                 -- scan reads from, so channel bus_test_channel's expected
                 -- value changes from here on
                 expected_ada(bus_test_channel) <= integer(raw_value * bus_test_new_gain_real + bus_test_new_offset_real);
             elsif cycle = 40 then
-                request_data_from_address(bus_to_adc_scaler, gain_ram_read_address + bus_test_channel);
-            elsif cycle = 45 then
-                request_data_from_address(bus_to_adc_scaler, offset_ram_read_address + bus_test_channel);
+                request_data_from_address(bus_to_adc_scaler, gain_ram_address + bus_test_channel);
+            elsif cycle = 100 then
+                request_data_from_address(bus_to_adc_scaler, offset_ram_address + bus_test_channel);
             end if;
 
-            if write_is_requested_to_address(bus_from_adc_scaler, gain_ram_readback_address) then
-                check(signed(get_slv_data(bus_from_adc_scaler)) = signed(bus_test_new_gain),
-                    "gain ram port b readback mismatch, got " & integer'image(to_integer(signed(get_slv_data(bus_from_adc_scaler)))));
-                bus_test_gain_done <= true;
-            end if;
-
-            if write_is_requested_to_address(bus_from_adc_scaler, offset_ram_readback_address) then
-                check(signed(get_slv_data(bus_from_adc_scaler)) = signed(bus_test_new_offset),
-                    "offset ram port b readback mismatch, got " & integer'image(to_integer(signed(get_slv_data(bus_from_adc_scaler)))));
-                bus_test_offset_done <= true;
+            -- the readback of whichever value was last requested arrives
+            -- on the address-0 reply channel : gain by cycle ~44, offset
+            -- by cycle ~104
+            if write_is_requested_to_address(bus_from_adc_scaler, reply_address) then
+                if not bus_test_gain_done then
+                    check(signed(get_slv_data(bus_from_adc_scaler)) = signed(bus_test_new_gain),
+                        "gain ram port b readback mismatch, got " & integer'image(to_integer(signed(get_slv_data(bus_from_adc_scaler)))));
+                    bus_test_gain_done <= true;
+                else
+                    check(signed(get_slv_data(bus_from_adc_scaler)) = signed(bus_test_new_offset),
+                        "offset ram port b readback mismatch, got " & integer'image(to_integer(signed(get_slv_data(bus_from_adc_scaler)))));
+                    bus_test_offset_done <= true;
+                end if;
             end if;
 
         end if; -- rising_edge
@@ -307,12 +308,8 @@ begin
         ,g_mux_switch_delay_in_clocks => 20
         ,g_gain_values   => gain_values
         ,g_offset_values => offset_values
-        ,g_gain_ram_read_address      => gain_ram_read_address
-        ,g_gain_ram_write_address     => gain_ram_write_address
-        ,g_gain_ram_readback_address  => gain_ram_readback_address
-        ,g_offset_ram_read_address     => offset_ram_read_address
-        ,g_offset_ram_write_address    => offset_ram_write_address
-        ,g_offset_ram_readback_address => offset_ram_readback_address
+        ,g_gain_ram_address   => gain_ram_address
+        ,g_offset_ram_address => offset_ram_address
     )
     port map(
         clock    => simulator_clock

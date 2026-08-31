@@ -64,13 +64,8 @@ entity adc_scale_pipeline is
         ;g_gain_values   : work.dual_port_ram_pkg.ram_array
         ;g_offset_values : work.dual_port_ram_pkg.ram_array
 
-        ;g_gain_ram_read_address     : natural
-        ;g_gain_ram_write_address    : natural
-        ;g_gain_ram_readback_address : natural
-
-        ;g_offset_ram_read_address     : natural
-        ;g_offset_ram_write_address    : natural
-        ;g_offset_ram_readback_address : natural
+        ;g_gain_ram_address   : natural
+        ;g_offset_ram_address : natural
     );
     port(
         clock : in std_logic
@@ -129,22 +124,6 @@ architecture rtl of adc_scale_pipeline is
         result(2*dsp_word_length-1 downto 0)
     );
 
-    type waiting_request is record
-        channel : std_logic_vector(3 downto 0); -- combined 0..15 index (8..15 for adb)
-        raw     : std_logic_vector(15 downto 0);
-    end record;
-
-    constant init_waiting_request : waiting_request := (
-        channel => (others => '0'), raw => (others => '0'));
-
-    -- grant -> adc_scale_pipeline_out latency, tracked purely by the
-    -- position of the {ada/adb, mux_pos} tag in scaling_pipeline :
-    --   ram_latency : request_data_from_ram (cycle T) -> ram_read_is_ready
-    --                 + valid data (T+3)
-    --   +1          : the add() at T+3 writes fixed_dsp_in (a signal), so
-    --                 fixed_dsp only sees request_with_1 at T+4
-    --   dsp_latency : fixed_dsp request_with_1 -> ready_with_1, i.e. the
-    --                 depth of arch_ecp5_fixed_dsp's ready_pipeline (5)
     constant ram_latency : natural := 3;
     constant dsp_latency : natural := 5;
     constant scaling_pipeline_depth : natural := ram_latency + 1 + dsp_latency;
@@ -211,28 +190,35 @@ begin
             init_ram(gain_ram_b_in);
             init_ram(offset_ram_b_in);
 
-            if data_is_requested_from_address_range(bus_to_adc_scaler, g_gain_ram_read_address, g_gain_ram_read_address+16) then
-                request_data_from_ram(gain_ram_b_in, get_address(bus_to_adc_scaler) - g_gain_ram_read_address);
+            -- one 16-address window per ram (channel 0..7 = ada, 8..15 =
+            -- adb). a read of <base + channel> triggers the port b ram
+            -- read, whose value comes back on the shared address-0 reply
+            -- channel ; a write of <base + channel> updates that channel's
+            -- calibration. read and write are told apart by the bus's
+            -- own read/write flags, not the address, so one window serves
+            -- both.
+            if data_is_requested_from_address_range(bus_to_adc_scaler, g_gain_ram_address, g_gain_ram_address+16) then
+                request_data_from_ram(gain_ram_b_in, get_address(bus_to_adc_scaler) - g_gain_ram_address);
             end if;
 
             if ram_read_is_ready(gain_ram_b_out) then
-                write_data_to_address(bus_from_adc_scaler, g_gain_ram_readback_address, get_ram_data(gain_ram_b_out));
+                write_data_to_address(bus_from_adc_scaler, 0, get_ram_data(gain_ram_b_out));
             end if;
 
-            if write_is_requested_to_address_range(bus_to_adc_scaler, g_gain_ram_write_address, g_gain_ram_write_address+16) then
-                write_data_to_ram(gain_ram_b_in, get_address(bus_to_adc_scaler) - g_gain_ram_write_address, get_slv_data(bus_to_adc_scaler));
+            if write_is_requested_to_address_range(bus_to_adc_scaler, g_gain_ram_address, g_gain_ram_address+16) then
+                write_data_to_ram(gain_ram_b_in, get_address(bus_to_adc_scaler) - g_gain_ram_address, get_slv_data(bus_to_adc_scaler));
             end if;
 
-            if data_is_requested_from_address_range(bus_to_adc_scaler, g_offset_ram_read_address, g_offset_ram_read_address+16) then
-                request_data_from_ram(offset_ram_b_in, get_address(bus_to_adc_scaler) - g_offset_ram_read_address);
+            if data_is_requested_from_address_range(bus_to_adc_scaler, g_offset_ram_address, g_offset_ram_address+16) then
+                request_data_from_ram(offset_ram_b_in, get_address(bus_to_adc_scaler) - g_offset_ram_address);
             end if;
 
             if ram_read_is_ready(offset_ram_b_out) then
-                write_data_to_address(bus_from_adc_scaler, g_offset_ram_readback_address, get_ram_data(offset_ram_b_out));
+                write_data_to_address(bus_from_adc_scaler, 0, get_ram_data(offset_ram_b_out));
             end if;
 
-            if write_is_requested_to_address_range(bus_to_adc_scaler, g_offset_ram_write_address, g_offset_ram_write_address+16) then
-                write_data_to_ram(offset_ram_b_in, get_address(bus_to_adc_scaler) - g_offset_ram_write_address, get_slv_data(bus_to_adc_scaler));
+            if write_is_requested_to_address_range(bus_to_adc_scaler, g_offset_ram_address, g_offset_ram_address+16) then
+                write_data_to_ram(offset_ram_b_in, get_address(bus_to_adc_scaler) - g_offset_ram_address, get_slv_data(bus_to_adc_scaler));
             end if;
 
         end if;

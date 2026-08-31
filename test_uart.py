@@ -58,19 +58,25 @@ adc_channel_addresses = {name: address for address, name in registers.items()
     if name.startswith("ada_ch") or name.startswith("adb_ch")}
 
 # adc_scale_pipeline exposes its per-channel calibration RAMs on port b :
-# reading <gain/offset read base + channel> triggers a port b RAM read
+# reading <gain/offset window base + channel> triggers a port b RAM read
 # whose value comes straight back on that same request. channels 0..7 are
 # ada mux positions, 8..15 are adb. values are signed fixed point at the
 # radix top.vhd's adc_scaler_radix sets (20).
-adc_scaler_gain_read_base   = bus_constants["adc_scaler_gain_ram_read_address"]
-adc_scaler_offset_read_base = bus_constants["adc_scaler_offset_ram_read_address"]
+adc_scaler_gain_base   = bus_constants["adc_scaler_gain_ram_address"]
+adc_scaler_offset_base = bus_constants["adc_scaler_offset_ram_address"]
 adc_scaler_radix = 20  # source/top.vhd : constant adc_scaler_radix
 
 def read_adc_scaler_gain(channel):
-    return to_signed32(get(adc_scaler_gain_read_base + channel))
+    return to_signed32(get(adc_scaler_gain_base + channel))
 
 def read_adc_scaler_offset(channel):
-    return to_signed32(get(adc_scaler_offset_read_base + channel))
+    return to_signed32(get(adc_scaler_offset_base + channel))
+
+def write_adc_scaler_gain(channel, value):
+    set(adc_scaler_gain_base + channel, int(value) & 0xffffffff)
+
+def write_adc_scaler_offset(channel, value):
+    set(adc_scaler_offset_base + channel, int(value) & 0xffffffff)
 
 def read_adc_scaler_calibration():
     scale = float(2 ** adc_scaler_radix)
