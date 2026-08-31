@@ -31,6 +31,7 @@ package muxed_adc_pkg is
     function adc_ready (self : muxed_adc_out_record) return boolean;
     function get_adc_result (self : muxed_adc_out_record) return std_logic_vector;
     function get_sampled_mux_pos (self : muxed_adc_out_record) return std_logic_vector;
+    function get_sampled_mux_pos (self : muxed_adc_out_record) return natural;
 
 end package muxed_adc_pkg;
 
@@ -63,6 +64,11 @@ package body muxed_adc_pkg is
     function get_sampled_mux_pos (self : muxed_adc_out_record) return std_logic_vector is
     begin
         return self.mux_pos_of_measurement;
+    end function;
+
+    function get_sampled_mux_pos (self : muxed_adc_out_record) return natural is
+    begin
+        return to_integer(unsigned(self.mux_pos_of_measurement));
     end function;
 
 end package body muxed_adc_pkg;

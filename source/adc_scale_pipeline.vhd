@@ -47,26 +47,6 @@ library ieee;
     use work.fpga_interconnect_pkg.all;
     use work.adc_scale_pipeline_pkg.all;
 
--- owns both muxed_adc instances (their physical pins are ports of this
--- entity) : the caller decides what to request of each -- and when --
--- by driving muxed_adc_a_in/muxed_adc_b_in directly (e.g. with
--- muxed_adc_pkg's own request_measurement), which are just forwarded
--- straight into the internal muxed_adc instances. their measurement
--- output records, by contrast, stay entirely internal : nothing outside
--- this entity ever sees a raw measurement, only the gain/offset lookup
--- and fixed_dsp fmac scaling this entity applies to it.
---
--- one dpram holds every channel's gain, the other every channel's
--- offset : address 0..7 is ada's channels 0..7, address 8..15 is adb's.
--- port a of each is dedicated to ada/adb's own scanning (arbitrated with
--- fixed priority, ada first, at the point they request a lookup -- since
--- that already serializes them to at most one ram request in flight at a
--- time, no separate arbitration is needed later at the shared
--- fixed_dsp). port b of each is exposed on bus_to_adc_scaler /
--- bus_from_adc_scaler instead, so a host can read or write any channel's
--- calibration values live, the same way top.vhd's own dpram exposes
--- ram_a/ram_b over fpga_interconnect : a 16-address read window and a
--- 16-address write window per ram, plus one fixed readback address each
 entity adc_scale_pipeline is
     generic(
         -- gain and offset are 32-bit signed values at this radix
@@ -149,65 +129,36 @@ architecture rtl of adc_scale_pipeline is
         result(2*dsp_word_length-1 downto 0)
     );
 
-    -- adb conversions that finished while ada was granted the ram lookup
-    -- this cycle queue here, so nothing is lost ; only channel+raw need
-    -- to be remembered (unlike a full dsp request) since gain/offset
-    -- haven't been fetched yet at this point. this is arbitration
-    -- backlog (depth depends on contention, not a fixed latency), so it
-    -- stays a fifo rather than becoming part of the shift register below
     type waiting_request is record
         channel : std_logic_vector(3 downto 0); -- combined 0..15 index (8..15 for adb)
         raw     : std_logic_vector(15 downto 0);
     end record;
+
     constant init_waiting_request : waiting_request := (
         channel => (others => '0'), raw => (others => '0'));
 
-    constant b_waiting_fifo_depth : natural := 4;
-    type waiting_request_array is array (0 to b_waiting_fifo_depth-1) of waiting_request;
-    signal b_waiting_fifo      : waiting_request_array := (others => init_waiting_request);
-    signal b_waiting_write_ptr : natural range 0 to b_waiting_fifo_depth-1 := 0;
-    signal b_waiting_read_ptr  : natural range 0 to b_waiting_fifo_depth-1 := 0;
-    signal b_waiting_count     : natural range 0 to b_waiting_fifo_depth  := 0;
-
-    -- carries {channel, raw measurement} for a granted request through
-    -- the ram lookup and on through fixed_dsp's own scaling, as a single
-    -- fixed-depth, non-blocking shift register : both dual_port_ram and
-    -- fixed_dsp accept a new request every cycle and always produce
-    -- their result a fixed number of cycles later, so (unlike
-    -- b_waiting_fifo's arbitration backlog, whose depth isn't
-    -- predictable) this latency is a known constant, measured via
-    -- simulation for this exact combination of dual_port_ram and
-    -- fixed_dsp(ecp5) : 3 cycles from a ram request becoming visible to
-    -- its data_is_ready, 6 more from a fixed_dsp request to its
-    -- ready_with_1. a new entry (or an unused placeholder, on a cycle
-    -- with no grant) shifts in every cycle regardless, so an entry
-    -- granted this cycle is always exactly ram_latency+dsp_latency
-    -- cycles behind its own result, whether or not the pipeline is busy
+    -- grant -> adc_scale_pipeline_out latency, tracked purely by the
+    -- position of the {ada/adb, mux_pos} tag in scaling_pipeline :
+    --   ram_latency : request_data_from_ram (cycle T) -> ram_read_is_ready
+    --                 + valid data (T+3)
+    --   +1          : the add() at T+3 writes fixed_dsp_in (a signal), so
+    --                 fixed_dsp only sees request_with_1 at T+4
+    --   dsp_latency : fixed_dsp request_with_1 -> ready_with_1, i.e. the
+    --                 depth of arch_ecp5_fixed_dsp's ready_pipeline (5)
     constant ram_latency : natural := 3;
-    constant dsp_latency : natural := 6;
-    constant scaling_pipeline_depth : natural := ram_latency + dsp_latency;
-    constant scaling_pipeline_width : natural := 4 + 16; -- channel & raw measurement
+    constant dsp_latency : natural := 5;
+    constant scaling_pipeline_depth : natural := ram_latency + 1 + dsp_latency;
+    constant scaling_pipeline_width : natural := 5 ; -- channel & ready
 
-    type scaling_pipeline_array is array (0 to scaling_pipeline_depth-1) of std_logic_vector(scaling_pipeline_width-1 downto 0);
-    signal scaling_pipeline : scaling_pipeline_array := (others => (others => '0'));
+    type std_vector_array is array (natural range <>) of std_logic_vector;
+    signal scaling_pipeline : std_vector_array(0 to scaling_pipeline_depth-1)(scaling_pipeline_width-1 downto 0) := (others => (others => '0'));
+    signal measurement_pipeline : std_vector_array(0 to ram_latency-1)(15 downto 0) := (others => (others => '0'));
 
-    -- g_gain_values / g_offset_values cannot be relied on as power-up ram
-    -- contents : Synplify does not carry these array generics across
-    -- adc_scale_pipeline's own generic boundary into the inner
-    -- dual_port_ram's init (the map report shows every INITVAL_* of
-    -- u_dpram_gain / u_dpram_offset as zero, while top.vhd's directly
-    -- instantiated dpram keeps its init). an all-zero gain ram makes
-    -- every scaled result raw*0 = 0, which is exactly the "all channels
-    -- read zero" symptom. so the defaults are instead written into both
-    -- rams over port a during the first 16 clocks after power-up, before
-    -- the scan is allowed to request anything -- the mux switch delay
-    -- alone is longer than that, so no conversion can complete first
-    constant last_channel_address : natural := 15;
-    signal startup_write_address  : natural range 0 to last_channel_address := 0;
-    signal startup_complete       : std_logic := '0';
+    signal muxed_adc_b_ready : boolean := false;
 
 begin
 
+--------------------------------------------------------
     u_muxed_adc_a : entity work.muxed_adc
     generic map(g_u8_clk_cnt, g_u8_clks_per_conversion, g_sh_counter_latch, g_mux_switch_delay_in_clocks)
     port map(
@@ -220,6 +171,7 @@ begin
         ,muxed_adc_out => muxed_adc_a_out
     );
 
+--------------------------------------------------------
     u_muxed_adc_b : entity work.muxed_adc
     generic map(g_u8_clk_cnt, g_u8_clks_per_conversion, g_sh_counter_latch, g_mux_switch_delay_in_clocks)
     port map(
@@ -232,14 +184,17 @@ begin
         ,muxed_adc_out => muxed_adc_b_out
     );
 
+--------------------------------------------------------
     u_dpram_gain : entity work.dual_port_ram
     generic map(g_dpram_subtype => dp_ram_subtype, g_ram_init_values => g_gain_values)
     port map(clock, gain_ram_in, gain_ram_out, gain_ram_b_in, gain_ram_b_out);
 
+--------------------------------------------------------
     u_dpram_offset : entity work.dual_port_ram
     generic map(g_dpram_subtype => dp_ram_subtype, g_ram_init_values => g_offset_values)
     port map(clock, offset_ram_in, offset_ram_out, offset_ram_b_in, offset_ram_b_out);
 
+--------------------------------------------------------
     u_fixed_dsp : entity work.fixed_dsp
     port map(
         clock => clock
@@ -247,11 +202,7 @@ begin
         ,fixed_dsp_out => fixed_dsp_out
     );
 
-    -- host access to port b of both rams, mirroring top.vhd's own
-    -- dpram-over-fpga_interconnect pattern : a read request at an address
-    -- in the read window is answered later at the fixed readback
-    -- address, once the ram reports it ready ; a write at an address in
-    -- the write window lands immediately
+--------------------------------------------------------
     bus_interface : process(clock)
     begin
         if rising_edge(clock) then
@@ -288,14 +239,11 @@ begin
     end process bus_interface;
 
     adc_scale_pipeline_out.ready_with_1 <= fixed_dsp_out.ready_with_1;
-    adc_scale_pipeline_out.channel      <= scaling_pipeline(scaling_pipeline_depth-1)(scaling_pipeline_width-1 downto 16);
+    adc_scale_pipeline_out.channel      <= scaling_pipeline(scaling_pipeline_depth-1)(3 downto 0);
     adc_scale_pipeline_out.scaled_value <= std_logic_vector(resize(shift_right(fixed_dsp_out.result, g_radix), 32));
 
+----------------------------------
     process(clock)
-        variable push_b   : boolean;
-        variable grant_a  : boolean;
-        variable pop_b    : boolean;
-        variable new_entry : std_logic_vector(scaling_pipeline_width-1 downto 0);
     begin
         if rising_edge(clock) then
 
@@ -303,64 +251,26 @@ begin
             init_ram(offset_ram_in);
             init_fixed_dsp(fixed_dsp_in);
 
-            -- a conversion completing always queues its request for a ram
-            -- lookup, regardless of whether it goes on to be granted this
-            -- same cycle, so nothing is lost when ada also wants the ram
-            -- this cycle
-            push_b := adc_ready(muxed_adc_b_out);
+            scaling_pipeline <= "00000" & scaling_pipeline(0 to scaling_pipeline_depth-2);
+            measurement_pipeline <= x"0000" & measurement_pipeline(0 to ram_latency-2);
 
-            -- arbiter : ada has fixed priority and is granted the ram the
-            -- instant its own conversion completes ; adb is granted from
-            -- its waiting queue whenever ada doesn't need the ram this
-            -- cycle (so if both complete the same cycle, ada enters the
-            -- scaling pipeline this cycle and adb the very next one)
-            grant_a := adc_ready(muxed_adc_a_out);
-            pop_b   := (not grant_a) and (b_waiting_count /= 0);
-
-            if push_b then
-                b_waiting_fifo(b_waiting_write_ptr) <= (
-                    channel => "1" & get_sampled_mux_pos(muxed_adc_b_out)
-                    ,raw    => get_adc_result(muxed_adc_b_out)
-                );
-                b_waiting_write_ptr <= (b_waiting_write_ptr + 1) mod b_waiting_fifo_depth;
+            muxed_adc_b_ready <= adc_ready(muxed_adc_b_out) or muxed_adc_b_ready;
+            if adc_ready(muxed_adc_a_out) then
+                measurement_pipeline(0) <= get_adc_result(muxed_adc_a_out);
+                request_data_from_ram(gain_ram_in,get_sampled_mux_pos(muxed_adc_a_out));
+                request_data_from_ram(offset_ram_in,get_sampled_mux_pos(muxed_adc_a_out));
+                scaling_pipeline(0) <= '1' & '0' & get_sampled_mux_pos(muxed_adc_a_out);
+            else
+                if adc_ready(muxed_adc_b_out) or muxed_adc_b_ready then
+                    measurement_pipeline(0) <= get_adc_result(muxed_adc_b_out);
+                    request_data_from_ram(gain_ram_in,get_sampled_mux_pos(muxed_adc_b_out)+8);
+                    request_data_from_ram(offset_ram_in,get_sampled_mux_pos(muxed_adc_b_out)+8);
+                    muxed_adc_b_ready <= false;
+                    scaling_pipeline(0) <= '1' & '1' & get_sampled_mux_pos(muxed_adc_b_out);
+                end if;
             end if;
 
-            -- whatever is granted this cycle (or nothing) enters the
-            -- scaling pipeline at stage 0 ; an idle cycle still shifts a
-            -- placeholder through, since the pipeline never stalls
-            new_entry := (others => '0');
 
-            if grant_a then
-
-                new_entry := "0" & get_sampled_mux_pos(muxed_adc_a_out) & get_adc_result(muxed_adc_a_out);
-                request_data_from_ram(gain_ram_in,   to_integer(unsigned(get_sampled_mux_pos(muxed_adc_a_out))));
-                request_data_from_ram(offset_ram_in, to_integer(unsigned(get_sampled_mux_pos(muxed_adc_a_out))));
-
-            elsif pop_b then
-
-                new_entry := b_waiting_fifo(b_waiting_read_ptr).channel & b_waiting_fifo(b_waiting_read_ptr).raw;
-                request_data_from_ram(gain_ram_in,   to_integer(unsigned(b_waiting_fifo(b_waiting_read_ptr).channel)));
-                request_data_from_ram(offset_ram_in, to_integer(unsigned(b_waiting_fifo(b_waiting_read_ptr).channel)));
-                b_waiting_read_ptr <= (b_waiting_read_ptr + 1) mod b_waiting_fifo_depth;
-
-            end if;
-
-            scaling_pipeline <= new_entry & scaling_pipeline(0 to scaling_pipeline_depth-2);
-
-            -- single, unambiguous update covering every combination of
-            -- push_b/pop_b this cycle (a plain "+1"/"-1" in each branch
-            -- above would let whichever one executed last in program
-            -- order silently clobber the other's update instead of
-            -- combining them)
-            if push_b and not pop_b then
-                b_waiting_count <= b_waiting_count + 1;
-            elsif pop_b and not push_b then
-                b_waiting_count <= b_waiting_count - 1;
-            end if;
-
-            -- a request granted ram_latency cycles ago (tracked purely
-            -- by pipeline position, not by re-deriving it from the ram)
-            -- is exactly what the ram is reporting ready right now
             if ram_read_is_ready(gain_ram_out) then
 
                 -- raw (radix 0) * gain (radix g_radix) = product at radix
@@ -368,7 +278,7 @@ begin
                 -- sign-extended into the product width and added directly,
                 -- with no shift of its own
                 add(fixed_dsp_in
-                    ,a => resize(signed('0' & scaling_pipeline(ram_latency-1)(15 downto 0)), dsp_word_length)
+                    ,a => resize(signed('0' & measurement_pipeline(ram_latency-1)), dsp_word_length)
                     ,b => resize(signed(get_ram_data(gain_ram_out)), dsp_word_length)
                     ,c => resize(signed(get_ram_data(offset_ram_out)), 2*dsp_word_length)
                 );

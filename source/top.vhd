@@ -229,7 +229,7 @@ architecture behavioral of top is
     signal muxed_adc_a_in : muxed_adc_in_record := init_muxed_adc_in;
     signal muxed_adc_b_in : muxed_adc_in_record := init_muxed_adc_in;
 
-    constant adc_scan_trigger_period : natural := 80;
+    constant adc_scan_trigger_period : natural := 120;
     signal adc_scan_trigger_counter  : natural range 0 to adc_scan_trigger_period-1 := 1;
     signal ada_next_channel : std_logic_vector(2 downto 0) := (others => '0');
     signal adb_next_channel : std_logic_vector(2 downto 0) := (others => '0');
@@ -311,10 +311,16 @@ begin
             ,g_offset_values => adc_scaler_default_offset
             ,g_gain_ram_read_address      => adc_scaler_gain_ram_read_address
             ,g_gain_ram_write_address     => adc_scaler_gain_ram_write_address
-            ,g_gain_ram_readback_address  => address_adc_scaler_gain_readback
+            -- both readbacks land on the shared address-0 reply channel
+            -- that ecp5_communications forwards over uart (same channel
+            -- address_ram_a_readback uses), so a single host read of a
+            -- gain/offset read-window address returns that channel's
+            -- calibration value directly. safe because the host serialises
+            -- its reads -- only one is ever in flight
+            ,g_gain_ram_readback_address  => address_ram_a_readback
             ,g_offset_ram_read_address     => adc_scaler_offset_ram_read_address
             ,g_offset_ram_write_address    => adc_scaler_offset_ram_write_address
-            ,g_offset_ram_readback_address => address_adc_scaler_offset_readback
+            ,g_offset_ram_readback_address => address_ram_a_readback
         )
         port map(
                 clock    => clk120MHz
