@@ -56,11 +56,6 @@ entity adc_scale_pipeline is
         -- that sum shifted back down by g_radix
         g_radix : natural := 20
 
-        ;g_u8_clk_cnt                 : integer := 2
-        ;g_u8_clks_per_conversion     : integer := 18
-        ;g_sh_counter_latch           : integer := 9
-        ;g_mux_switch_delay_in_clocks : natural := 20
-
         ;g_gain_values   : work.dual_port_ram_pkg.ram_array
         ;g_offset_values : work.dual_port_ram_pkg.ram_array
 
@@ -70,21 +65,13 @@ entity adc_scale_pipeline is
     port(
         clock : in std_logic
 
-        ;ada_mux   : out std_logic_vector(2 downto 0)
-        ;ada_clock : out std_logic
-        ;ada_cs    : out std_logic
-        ;ada_data  : in std_logic
-
-        ;adb_mux   : out std_logic_vector(2 downto 0)
-        ;adb_clock : out std_logic
-        ;adb_cs    : out std_logic
-        ;adb_data  : in std_logic
-
         ;bus_to_adc_scaler : in work.fpga_interconnect_pkg.fpga_interconnect_record
         ;bus_from_adc_scaler : out work.fpga_interconnect_pkg.fpga_interconnect_record
 
-        ;muxed_adc_a_in : in muxed_adc_in_record
-        ;muxed_adc_b_in : in muxed_adc_in_record
+        -- measurement results from the two muxed_adc instances, which now
+        -- live one level up (same layer as this entity)
+        ;muxed_adc_a_out : in muxed_adc_out_record
+        ;muxed_adc_b_out : in muxed_adc_out_record
 
         ;adc_scale_pipeline_out : out adc_scale_pipeline_out_record
     );
@@ -93,9 +80,6 @@ end entity adc_scale_pipeline;
 architecture rtl of adc_scale_pipeline is
 
     constant dsp_word_length : natural := 32;
-
-    signal muxed_adc_a_out : muxed_adc_out_record;
-    signal muxed_adc_b_out : muxed_adc_out_record;
 
     constant dp_ram_subtype : dpram_ref_record := create_ref_subtypes(
         datawidth     => 32
@@ -136,32 +120,6 @@ architecture rtl of adc_scale_pipeline is
     signal muxed_adc_b_ready : boolean := false;
 
 begin
-
---------------------------------------------------------
-    u_muxed_adc_a : entity work.muxed_adc
-    generic map(g_u8_clk_cnt, g_u8_clks_per_conversion, g_sh_counter_latch, g_mux_switch_delay_in_clocks)
-    port map(
-        clock    => clock
-        ,mux_io  => ada_mux
-        ,ad_clock => ada_clock
-        ,ad_cs    => ada_cs
-        ,ad_data  => ada_data
-        ,muxed_adc_in  => muxed_adc_a_in
-        ,muxed_adc_out => muxed_adc_a_out
-    );
-
---------------------------------------------------------
-    u_muxed_adc_b : entity work.muxed_adc
-    generic map(g_u8_clk_cnt, g_u8_clks_per_conversion, g_sh_counter_latch, g_mux_switch_delay_in_clocks)
-    port map(
-        clock    => clock
-        ,mux_io  => adb_mux
-        ,ad_clock => adb_clock
-        ,ad_cs    => adb_cs
-        ,ad_data  => adb_data
-        ,muxed_adc_in  => muxed_adc_b_in
-        ,muxed_adc_out => muxed_adc_b_out
-    );
 
 --------------------------------------------------------
     u_dpram_gain : entity work.dual_port_ram

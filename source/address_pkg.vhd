@@ -23,7 +23,8 @@ package address_pkg is
     constant address_sine_result       : natural := 13;
 
     -- ada/adb continuously round-robin mux positions 0 to 7 ; each
-    -- channel's latest reading lands in its own read-only address
+    -- channel's latest scaled reading lands in its own read-only address
+    -- (these 16 are contiguous and form a window keyed off address_ada_ch0)
     constant address_ada_ch0 : natural := 14;
     constant address_ada_ch1 : natural := 15;
     constant address_ada_ch2 : natural := 16;
@@ -51,6 +52,11 @@ package address_pkg is
     -- uses) ; a write of <base + channel> updates that channel.
     constant adc_scaler_gain_ram_address   : natural := 700;
     constant adc_scaler_offset_ram_address : natural := 750;
+
+    -- base of a read-only 16-address window (one per channel, 0..7 = ada,
+    -- 8..15 = adb) holding the raw, unscaled adc code for each channel,
+    -- backed by u_dpram_adc_raw in top.vhd
+    constant adc_raw_ram_address : natural := 800;
 
     constant test_memory_address_low  : natural := 100;
     constant test_memory_address_high : natural := 611;

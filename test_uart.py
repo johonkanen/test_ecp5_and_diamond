@@ -78,6 +78,19 @@ def write_adc_scaler_gain(channel, value):
 def write_adc_scaler_offset(channel, value):
     set(adc_scaler_offset_base + channel, int(value) & 0xffffffff)
 
+# u_dpram_adc_raw : the raw, unscaled adc code per channel (0..7 ada,
+# 8..15 adb), read straight back on the request. codes are unsigned.
+adc_raw_base = bus_constants["adc_raw_ram_address"]
+
+def read_adc_raw(channel):
+    return get(adc_raw_base + channel) & 0xffff
+
+def read_adc_raw_all():
+    print("adc raw codes:")
+    for channel in range(16):
+        name = ("ada_ch%d" % channel) if channel < 8 else ("adb_ch%d" % (channel - 8))
+        print("  %-8s %5d" % (name, read_adc_raw(channel)))
+
 def read_adc_scaler_calibration():
     scale = float(2 ** adc_scaler_radix)
     print("adc scaler per-channel calibration (fixed point, radix", adc_scaler_radix, "):")
@@ -94,6 +107,7 @@ def test_hw():
         print(address, name, to_signed32(get(address)))
 
     read_adc_scaler_calibration()
+    read_adc_raw_all()
 
     print("streaming", stream_length, "points from address", sine_result_address, ", sine_result")
     signed_stream = to_signed32(uart.stream_data_from_address(sine_result_address, stream_length))

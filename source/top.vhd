@@ -144,6 +144,17 @@ architecture behavioral of top is
     signal ram_b_in  : dp_ram_subtype.ram_in'subtype := dp_ram_subtype.ram_in;
     signal ram_b_out : dp_ram_subtype.ram_out'subtype;
 
+    -- u_dpram_adc_raw : 16 words holding the raw, unscaled adc code per
+    -- channel. port a = ada codes + host reads (any channel), port b =
+    -- adb codes.
+    constant adc_raw_ram_subtype : dpram_ref_record :=
+        create_ref_subtypes(datawidth => 32, addresswidth => 4);
+    constant adc_raw_ram_init : ram_array(0 to 15)(31 downto 0) := (others => (others => '0'));
+    signal raw_ram_a_in  : adc_raw_ram_subtype.ram_in'subtype := adc_raw_ram_subtype.ram_in;
+    signal raw_ram_a_out : adc_raw_ram_subtype.ram_out'subtype;
+    signal raw_ram_b_in  : adc_raw_ram_subtype.ram_in'subtype := adc_raw_ram_subtype.ram_in;
+    signal raw_ram_b_out : adc_raw_ram_subtype.ram_out'subtype;
+
 	---
 
     -- microprogram processor start
@@ -215,19 +226,19 @@ architecture behavioral of top is
     ------------------------------------------------------------------------
     -- ada/adb muxed_adc scan, scaled through adc_scale_pipeline : each
     -- continuously round-robins mux positions 0 to 7, one measurement in
-    -- flight at a time. adc_scale_pipeline owns the muxed_adc instances
-    -- (and their fixed_dsp/gain/offset rams) internally, so this hookup
-    -- only ever sees the already-scaled result -- it can't watch for
-    -- adc_ready the way a caller with direct muxed_adc access could, so
-    -- the round-robin here advances on a fixed, generous period instead
+    -- flight at a time. the two muxed_adc instances sit here alongside
+    -- adc_scale_pipeline (which just takes their measurement records) ;
+    -- the round-robin below advances on a fixed, generous period
     -- (matching adc_scale_pipeline_tb.vhd's own approach)
     use work.muxed_adc_pkg.all;
     use work.adc_scale_pipeline_pkg.all;
     use work.address_pkg.all;
     use work.real_to_fixed_pkg.all;
 
-    signal muxed_adc_a_in : muxed_adc_in_record := init_muxed_adc_in;
-    signal muxed_adc_b_in : muxed_adc_in_record := init_muxed_adc_in;
+    signal muxed_adc_a_in  : muxed_adc_in_record := init_muxed_adc_in;
+    signal muxed_adc_b_in  : muxed_adc_in_record := init_muxed_adc_in;
+    signal muxed_adc_a_out : muxed_adc_out_record;
+    signal muxed_adc_b_out : muxed_adc_out_record;
 
     constant adc_scan_trigger_period : natural := 500;
     signal adc_scan_trigger_counter  : natural range 0 to adc_scan_trigger_period-1 := 1;
@@ -507,6 +518,26 @@ begin
 					request_data_from_ram(ram_a_in, get_address(bus_from_communications) - address_ada_ch0);
                 end if;
 
+				-- raw adc codes : store ada's on port a of u_dpram_adc_raw
+				-- as they complete, otherwise serve a host read of the
+				-- 16-address adc_raw_ram_address window (ch 0..15) ; a
+				-- same-cycle store wins and the host retries the read
+				init_ram(raw_ram_a_in);
+				if adc_ready(muxed_adc_a_out) then
+					write_data_to_ram(raw_ram_a_in
+						, get_sampled_mux_pos(muxed_adc_a_out)
+						, std_logic_vector(resize(unsigned(get_adc_result(muxed_adc_a_out)), 32)));
+				elsif read_is_requested(bus_from_communications)
+					and get_address(bus_from_communications) >= adc_raw_ram_address
+					and get_address(bus_from_communications) < adc_raw_ram_address + 16
+				then
+					request_data_from_ram(raw_ram_a_in, get_address(bus_from_communications) - adc_raw_ram_address);
+				end if;
+
+				if ram_read_is_ready(raw_ram_a_out) then
+					write_data_to_address(bus_from_top, 0, get_ram_data(raw_ram_a_out));
+				end if;
+
                 conversion_counter <= conversion_counter + 1;
                 if conversion_counter >= 1000 then
                     conversion_counter <= 0;
@@ -606,39 +637,57 @@ begin
         );
 
 ------------------------------------------------------------------------
+    u_muxed_adc_a : entity work.muxed_adc
+    generic map(2, 18, 9, 20)
+    port map(
+        clock    => clk120MHz
+        ,mux_io   => ada_mux
+        ,ad_clock => ada_clock
+        ,ad_cs    => ada_cs
+        ,ad_data  => ada_data
+        ,muxed_adc_in  => muxed_adc_a_in
+        ,muxed_adc_out => muxed_adc_a_out
+    );
+
+------------------------------------------------------------------------
+    u_muxed_adc_b : entity work.muxed_adc
+    generic map(2, 18, 9, 20)
+    port map(
+        clock    => clk120MHz
+        ,mux_io   => adb_mux
+        ,ad_clock => adb_clock
+        ,ad_cs    => adb_cs
+        ,ad_data  => adb_data
+        ,muxed_adc_in  => muxed_adc_b_in
+        ,muxed_adc_out => muxed_adc_b_out
+    );
+
+------------------------------------------------------------------------
     u_adc_scale_pipeline : entity work.adc_scale_pipeline
         generic map(
-            g_radix                       => adc_scaler_radix
-            ,g_u8_clk_cnt                 => 2
-            ,g_u8_clks_per_conversion     => 18
-            ,g_sh_counter_latch           => 9
-            ,g_mux_switch_delay_in_clocks => 20
-            ,g_gain_values                => adc_scaler_default_gain
-            ,g_offset_values              => adc_scaler_default_offset
-            ,g_gain_ram_address           => adc_scaler_gain_ram_address
-            ,g_offset_ram_address         => adc_scaler_offset_ram_address
+            g_radix              => adc_scaler_radix
+            ,g_gain_values       => adc_scaler_default_gain
+            ,g_offset_values     => adc_scaler_default_offset
+            ,g_gain_ram_address   => adc_scaler_gain_ram_address
+            ,g_offset_ram_address => adc_scaler_offset_ram_address
         )
         port map(
                 clock    => clk120MHz
-                ,ada_mux   => ada_mux
-                ,ada_clock => ada_clock
-                ,ada_cs    => ada_cs
-                ,ada_data  => ada_data
-                ,adb_mux   => adb_mux
-                ,adb_clock => adb_clock
-                ,adb_cs    => adb_cs
-                ,adb_data  => adb_data
-
                 ,bus_to_adc_scaler      => bus_from_communications
                 ,bus_from_adc_scaler    => bus_from_adc_scaler
-                ,muxed_adc_a_in         => muxed_adc_a_in
-                ,muxed_adc_b_in         => muxed_adc_b_in
+                ,muxed_adc_a_out        => muxed_adc_a_out
+                ,muxed_adc_b_out        => muxed_adc_b_out
                 ,adc_scale_pipeline_out => adc_scale_pipeline_out
         );
 ------------------------------------------------------------------------
     u_dpram : entity work.dual_port_ram
     generic map(g_dpram_subtype => dp_ram_subtype, g_ram_init_values => init_values)
     port map(clk120MHz, ram_a_in, ram_a_out, ram_b_in, ram_b_out);
+
+------------------------------------------------------------------------
+    u_dpram_adc_raw : entity work.dual_port_ram
+    generic map(g_dpram_subtype => adc_raw_ram_subtype, g_ram_init_values => adc_raw_ram_init)
+    port map(clk120MHz, raw_ram_a_in, raw_ram_a_out, raw_ram_b_in, raw_ram_b_out);
 
 ------------------------------------------------------------------------
         adc_scan : process(clk120Mhz)
@@ -669,6 +718,16 @@ begin
 						, get_scaled_value(adc_scale_pipeline_out));
 				end if;
 
+				-- raw adc codes : adb's go into u_dpram_adc_raw port b at
+				-- ram address = 8 + mux position (ada's go into port a from
+				-- the test_uart process). ada and adb complete the same
+				-- cycle, hence the two ports.
+				init_ram(raw_ram_b_in);
+				if adc_ready(muxed_adc_b_out) then
+					write_data_to_ram(raw_ram_b_in
+						, 8 + get_sampled_mux_pos(muxed_adc_b_out)
+						, std_logic_vector(resize(unsigned(get_adc_result(muxed_adc_b_out)), 32)));
+				end if;
 
             end if;
         end process;

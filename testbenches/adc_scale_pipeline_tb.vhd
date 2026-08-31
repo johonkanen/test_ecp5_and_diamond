@@ -47,13 +47,12 @@ architecture vunit_simulation of adc_scale_pipeline_tb is
     constant clock_period      : time    := 1 ns;
     constant simtime_in_clocks : integer := 3000;
 
-    -- adc_scale_pipeline no longer sequences channels itself (the caller
-    -- drives muxed_adc_a_in/muxed_adc_b_in directly now, and can no
-    -- longer see muxed_adc's own ready/mux tag to pace off of, since
-    -- that record stays entirely internal to adc_scale_pipeline) ; a
-    -- fixed period, generous versus one conversion + ram lookup +
-    -- arbitration, keeps this simple and correct without needing that
-    -- visibility, matching testbenches/muxed_adc_tb.vhd's own approach
+    -- the muxed_adc instances now sit in the testbench alongside the DUT
+    -- (as in top.vhd) ; this process drives their request inputs and
+    -- adc_scale_pipeline only sees their measurement records. a fixed
+    -- period, generous versus one conversion + ram lookup + arbitration,
+    -- keeps the round-robin here simple and correct without watching
+    -- muxed_adc's own ready/mux tag
     constant trigger_period : natural := 80;
 
     constant scaler_radix : natural := 20;
@@ -130,8 +129,10 @@ architecture vunit_simulation of adc_scale_pipeline_tb is
     signal adb_cs    : std_logic;
     signal adb_data  : std_logic := '1';
 
-    signal muxed_adc_a_in : muxed_adc_in_record := init_muxed_adc_in;
-    signal muxed_adc_b_in : muxed_adc_in_record := init_muxed_adc_in;
+    signal muxed_adc_a_in  : muxed_adc_in_record := init_muxed_adc_in;
+    signal muxed_adc_b_in  : muxed_adc_in_record := init_muxed_adc_in;
+    signal muxed_adc_a_out : muxed_adc_out_record;
+    signal muxed_adc_b_out : muxed_adc_out_record;
 
     -- offset by 1 (not 0) so the first trigger lands well after the
     -- adc's own startup calibration, instead of racing it at time 0
@@ -298,14 +299,37 @@ begin
         adb_data <= shift_register(shift_register'high);
     end process;
 ------------------------------------------------------------------------
+    -- the two muxed_adc instances now sit alongside the DUT (as in
+    -- top.vhd), feeding it only their measurement records
+    u_muxed_adc_a : entity work.muxed_adc
+    generic map(2, 18, 9, 20)
+    port map(
+        clock    => simulator_clock
+        ,mux_io   => ada_mux
+        ,ad_clock => ada_clock
+        ,ad_cs    => ada_cs
+        ,ad_data  => ada_data
+        ,muxed_adc_in  => muxed_adc_a_in
+        ,muxed_adc_out => muxed_adc_a_out
+    );
+
+    u_muxed_adc_b : entity work.muxed_adc
+    generic map(2, 18, 9, 20)
+    port map(
+        clock    => simulator_clock
+        ,mux_io   => adb_mux
+        ,ad_clock => adb_clock
+        ,ad_cs    => adb_cs
+        ,ad_data  => adb_data
+        ,muxed_adc_in  => muxed_adc_b_in
+        ,muxed_adc_out => muxed_adc_b_out
+    );
+
+------------------------------------------------------------------------
 
     u_adc_scale_pipeline : entity work.adc_scale_pipeline
     generic map(
         g_radix => scaler_radix
-        ,g_u8_clk_cnt => 2
-        ,g_u8_clks_per_conversion => 18
-        ,g_sh_counter_latch => 9
-        ,g_mux_switch_delay_in_clocks => 20
         ,g_gain_values   => gain_values
         ,g_offset_values => offset_values
         ,g_gain_ram_address   => gain_ram_address
@@ -313,18 +337,10 @@ begin
     )
     port map(
         clock    => simulator_clock
-        ,ada_mux   => ada_mux
-        ,ada_clock => ada_clock
-        ,ada_cs    => ada_cs
-        ,ada_data  => ada_data
-        ,adb_mux   => adb_mux
-        ,adb_clock => adb_clock
-        ,adb_cs    => adb_cs
-        ,adb_data  => adb_data
-        ,muxed_adc_a_in => muxed_adc_a_in
-        ,muxed_adc_b_in => muxed_adc_b_in
-        ,bus_to_adc_scaler   => bus_to_adc_scaler  
+        ,bus_to_adc_scaler   => bus_to_adc_scaler
         ,bus_from_adc_scaler => bus_from_adc_scaler
+        ,muxed_adc_a_out => muxed_adc_a_out
+        ,muxed_adc_b_out => muxed_adc_b_out
         ,adc_scale_pipeline_out => adc_scale_pipeline_out
     );
 ------------------------------------------------------------------------
