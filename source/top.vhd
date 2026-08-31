@@ -140,20 +140,31 @@ architecture behavioral of top is
         , addresswidth => 9);
     signal ram_a_in  : dp_ram_subtype.ram_in'subtype := dp_ram_subtype.ram_in;
     signal ram_a_out : dp_ram_subtype.ram_out'subtype;
-    --------------------
+    -- port b of u_dpram is unused (scaled adc results moved to the
+    -- register array below) ; test_memory drives port a only.
     signal ram_b_in  : dp_ram_subtype.ram_in'subtype := dp_ram_subtype.ram_in;
     signal ram_b_out : dp_ram_subtype.ram_out'subtype;
 
-    -- u_dpram_adc_raw : 16 words holding the raw, unscaled adc code per
-    -- channel. port a = ada codes + host reads (any channel), port b =
-    -- adb codes.
-    constant adc_raw_ram_subtype : dpram_ref_record :=
-        create_ref_subtypes(datawidth => 32, addresswidth => 4);
-    constant adc_raw_ram_init : ram_array(0 to 15)(31 downto 0) := (others => (others => '0'));
-    signal raw_ram_a_in  : adc_raw_ram_subtype.ram_in'subtype := adc_raw_ram_subtype.ram_in;
-    signal raw_ram_a_out : adc_raw_ram_subtype.ram_out'subtype;
-    signal raw_ram_b_in  : adc_raw_ram_subtype.ram_in'subtype := adc_raw_ram_subtype.ram_in;
-    signal raw_ram_b_out : adc_raw_ram_subtype.ram_out'subtype;
+    -- per-channel adc results, 0..7 = ada mux positions, 8..15 = adb.
+    -- plain register arrays, not dual_port_ram : arch_rtl_dp_ram splits
+    -- every dual_port_ram into two disconnected single-port EBRs on this
+    -- synplify, so a value written by one process never reaches a read in
+    -- another -- that is what left the scaled results reading back zero.
+    -- syn_ramstyle "registers" keeps them as coherent FFs.
+    type adc_channel_array is array (0 to 15) of std_logic_vector(31 downto 0);
+    signal adc_scaled_channels : adc_channel_array := (others => (others => '0'));
+    signal adc_raw_channels    : adc_channel_array := (others => (others => '0'));
+
+    -- debug: does adc_scale_pipeline_out ever pulse ready, and what value
+    -- rides along when it does (independent of the per-channel demux)
+    signal adc_ready_count : unsigned(31 downto 0) := (others => '0');
+    signal adc_scaled_last : std_logic_vector(31 downto 0) := (others => '0');
+    signal adc_dbg_a       : std_logic_vector(31 downto 0);
+    signal adc_dbg_b       : std_logic_vector(31 downto 0);
+    signal adc_dbg_res_or  : std_logic_vector(31 downto 0);
+    attribute syn_ramstyle : string;
+    attribute syn_ramstyle of adc_scaled_channels : signal is "registers";
+    attribute syn_ramstyle of adc_raw_channels    : signal is "registers";
 
 	---
 
@@ -233,7 +244,6 @@ architecture behavioral of top is
     use work.muxed_adc_pkg.all;
     use work.adc_scale_pipeline_pkg.all;
     use work.address_pkg.all;
-    use work.real_to_fixed_pkg.all;
 
     signal muxed_adc_a_in  : muxed_adc_in_record := init_muxed_adc_in;
     signal muxed_adc_b_in  : muxed_adc_in_record := init_muxed_adc_in;
@@ -253,12 +263,13 @@ architecture behavioral of top is
     signal bus_to_adc_scaler      : work.fpga_interconnect_pkg.fpga_interconnect_record;
     signal bus_from_adc_scaler    : work.fpga_interconnect_pkg.fpga_interconnect_record;
 
-    -- default calibration : identity scaling (gain 1.0, offset 0), as
-    -- 32-bit signed values at radix adc_scaler_radix, until a host
-    -- calibrates real values in over bus_to_adc_scaler/bus_from_adc_scaler
+    -- adc_scale_pipeline powers its per-channel gain/offset rams up as
+    -- identity scaling (gain 1.0, offset 0) from a local constant of its
+    -- own -- the default is no longer passed in from here (synplify drops
+    -- a dual_port_ram init that crosses an entity's generic boundary).
+    -- a host calibrates real values in over
+    -- bus_to_adc_scaler/bus_from_adc_scaler.
     constant adc_scaler_radix : natural := 20;
-    constant adc_scaler_default_gain   : work.dual_port_ram_pkg.ram_array(0 to 15)(31 downto 0) := (others => to_fixed(1.0, 32, adc_scaler_radix));
-    constant adc_scaler_default_offset : work.dual_port_ram_pkg.ram_array(0 to 15)(31 downto 0) := (others => to_fixed(0.0, 32, adc_scaler_radix));
     ------------------------------------------------------------------------
 	
     use work.fixed_dsp_pkg.all;
@@ -510,33 +521,28 @@ begin
 				connect_data_to_address(bus_from_communications           , bus_from_top , address_test_data9 , test_data9);
 				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_sine_result , sine_result);
 
-				init_ram(ram_a_in);
-				if read_is_requested(bus_from_communications)
-					and get_address(bus_from_communications) >= address_ada_ch0
-					and get_address(bus_from_communications) <= address_adb_ch7
-				then
-					request_data_from_ram(ram_a_in, get_address(bus_from_communications) - address_ada_ch0);
-                end if;
+				-- per-channel adc results, straight out of their register
+				-- arrays : scaled at address_ada_ch0 .. address_adb_ch7
+				-- (16 contiguous), raw codes in the 16-address
+				-- adc_raw_ram_address window (ch 0..15)
+				for ch in 0 to 15 loop
+					connect_read_only_data_to_address(bus_from_communications, bus_from_top, address_ada_ch0 + ch, adc_scaled_channels(ch));
+				end loop;
+				connect_read_only_data_to_address(bus_from_communications, bus_from_top, address_adc_ready_count, std_logic_vector(adc_ready_count));
+				connect_read_only_data_to_address(bus_from_communications, bus_from_top, address_adc_scaled_last, adc_scaled_last);
+				connect_read_only_data_to_address(bus_from_communications, bus_from_top, address_adc_dbg_a, adc_dbg_a);
+				connect_read_only_data_to_address(bus_from_communications, bus_from_top, address_adc_dbg_b, adc_dbg_b);
+				connect_read_only_data_to_address(bus_from_communications, bus_from_top, address_adc_dbg_res_or, adc_dbg_res_or);
 
-				-- raw adc codes : store ada's on port a of u_dpram_adc_raw
-				-- as they complete, otherwise serve a host read of the
-				-- 16-address adc_raw_ram_address window (ch 0..15) ; a
-				-- same-cycle store wins and the host retries the read
-				init_ram(raw_ram_a_in);
-				if adc_ready(muxed_adc_a_out) then
-					write_data_to_ram(raw_ram_a_in
-						, get_sampled_mux_pos(muxed_adc_a_out)
-						, std_logic_vector(resize(unsigned(get_adc_result(muxed_adc_a_out)), 32)));
-				elsif read_is_requested(bus_from_communications)
+				if read_is_requested(bus_from_communications)
 					and get_address(bus_from_communications) >= adc_raw_ram_address
 					and get_address(bus_from_communications) < adc_raw_ram_address + 16
 				then
-					request_data_from_ram(raw_ram_a_in, get_address(bus_from_communications) - adc_raw_ram_address);
+					write_data_to_address(bus_from_top, 0,
+						adc_raw_channels(get_address(bus_from_communications) - adc_raw_ram_address));
 				end if;
 
-				if ram_read_is_ready(raw_ram_a_out) then
-					write_data_to_address(bus_from_top, 0, get_ram_data(raw_ram_a_out));
-				end if;
+				init_ram(ram_a_in);
 
                 conversion_counter <= conversion_counter + 1;
                 if conversion_counter >= 1000 then
@@ -665,9 +671,7 @@ begin
 ------------------------------------------------------------------------
     u_adc_scale_pipeline : entity work.adc_scale_pipeline
         generic map(
-            g_radix              => adc_scaler_radix
-            ,g_gain_values       => adc_scaler_default_gain
-            ,g_offset_values     => adc_scaler_default_offset
+            g_radix               => adc_scaler_radix
             ,g_gain_ram_address   => adc_scaler_gain_ram_address
             ,g_offset_ram_address => adc_scaler_offset_ram_address
         )
@@ -678,16 +682,14 @@ begin
                 ,muxed_adc_a_out        => muxed_adc_a_out
                 ,muxed_adc_b_out        => muxed_adc_b_out
                 ,adc_scale_pipeline_out => adc_scale_pipeline_out
+                ,dbg_a        => adc_dbg_a
+                ,dbg_b        => adc_dbg_b
+                ,dbg_result_or => adc_dbg_res_or
         );
 ------------------------------------------------------------------------
     u_dpram : entity work.dual_port_ram
     generic map(g_dpram_subtype => dp_ram_subtype, g_ram_init_values => init_values)
     port map(clk120MHz, ram_a_in, ram_a_out, ram_b_in, ram_b_out);
-
-------------------------------------------------------------------------
-    u_dpram_adc_raw : entity work.dual_port_ram
-    generic map(g_dpram_subtype => adc_raw_ram_subtype, g_ram_init_values => adc_raw_ram_init)
-    port map(clk120MHz, raw_ram_a_in, raw_ram_a_out, raw_ram_b_in, raw_ram_b_out);
 
 ------------------------------------------------------------------------
         adc_scan : process(clk120Mhz)
@@ -710,24 +712,32 @@ begin
                     adb_next_channel <= std_logic_vector(unsigned(adb_next_channel) + 1);
                 end if;
 
-                -- scaled results are stored into u_dpram port b
-				init_ram(ram_b_in);
+                -- scaled results and raw codes land in their register
+                -- arrays (0..7 = ada mux positions, 8..15 = adb). writes
+                -- are decoded per channel : a variable-index array write
+                -- makes synplify infer un-initialisable LUT RAM, so each
+                -- channel gets its own compare + enable and stays a FF.
+				for ch in 0 to 15 loop
+					if adc_ready(adc_scale_pipeline_out)
+						and to_integer(unsigned(get_channel(adc_scale_pipeline_out))) = ch
+					then
+						adc_scaled_channels(ch) <= get_scaled_value(adc_scale_pipeline_out);
+					end if;
+				end loop;
+
 				if adc_ready(adc_scale_pipeline_out) then
-					write_data_to_ram(ram_b_in
-						, to_integer(unsigned(get_channel(adc_scale_pipeline_out)))
-						, get_scaled_value(adc_scale_pipeline_out));
+					adc_ready_count <= adc_ready_count + 1;
+					adc_scaled_last <= get_scaled_value(adc_scale_pipeline_out);
 				end if;
 
-				-- raw adc codes : adb's go into u_dpram_adc_raw port b at
-				-- ram address = 8 + mux position (ada's go into port a from
-				-- the test_uart process). ada and adb complete the same
-				-- cycle, hence the two ports.
-				init_ram(raw_ram_b_in);
-				if adc_ready(muxed_adc_b_out) then
-					write_data_to_ram(raw_ram_b_in
-						, 8 + get_sampled_mux_pos(muxed_adc_b_out)
-						, std_logic_vector(resize(unsigned(get_adc_result(muxed_adc_b_out)), 32)));
-				end if;
+				for ch in 0 to 7 loop
+					if adc_ready(muxed_adc_a_out) and get_sampled_mux_pos(muxed_adc_a_out) = ch then
+						adc_raw_channels(ch) <= std_logic_vector(resize(unsigned(get_adc_result(muxed_adc_a_out)), 32));
+					end if;
+					if adc_ready(muxed_adc_b_out) and get_sampled_mux_pos(muxed_adc_b_out) = ch then
+						adc_raw_channels(8 + ch) <= std_logic_vector(resize(unsigned(get_adc_result(muxed_adc_b_out)), 32));
+					end if;
+				end loop;
 
             end if;
         end process;

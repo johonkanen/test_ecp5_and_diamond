@@ -17,13 +17,12 @@ context vunit_lib.vunit_context;
 -- (scaled = raw*gain + offset), and the result comes back tagged with
 -- the right one of the 16 channels.
 --
--- note: adc_scale_pipeline writes g_gain_values/g_offset_values into its
--- rams over the first 16 clocks (the generic ram init does not survive
--- ecp5 synthesis across its generic boundary). in simulation the ram
--- model also honours the generic init, so both paths land the same
--- contents here -- this bench can't tell a broken startup writer from a
--- working one, it only proves the 16-clock startup gate doesn't deadlock
--- the pipeline. the startup writer is what actually matters on hardware.
+-- note: adc_scale_pipeline no longer takes a gain/offset init generic
+-- (synplify drops a dual_port_ram init that crosses an entity's generic
+-- boundary). its rams power up as identity (gain 1.0, offset 0) from a
+-- local constant ; this bench calibrates all 16 gains and 16 offsets in
+-- over port b during the first ~32 clocks, before the first measurement
+-- result can appear, then checks the scaled results against those values.
 --
 -- both fake ads7056 slaves (u_ada_slave/u_adb_slave, the same
 -- falling_edge(ad_cs)-loads / rising_edge(ad_clock)-shifts loopback
@@ -197,12 +196,15 @@ begin
     end process stimulus;
 ------------------------------------------------------------------------
 
-    -- exercises port b of both rams over fpga_interconnect : writes a new
-    -- value to one channel, then requests it back and checks the
-    -- readback matches -- proving the host path actually reaches the ram
-    -- and back, independent of ada/adb's own port a scanning.
-    -- gain and offset both reply on address 0, so the readbacks are done
-    -- one at a time (gain first, then offset) the way a real host would.
+    -- first loads the whole calibration in over port b (16 gains on
+    -- cycles 1..16, 16 offsets on cycles 17..32 -- well before the first
+    -- measurement result can appear), since the rams now power up as
+    -- identity rather than from a generic. then exercises the readback
+    -- path : rewrites one channel, requests it back and checks the
+    -- readback matches -- proving the host path reaches the ram and back,
+    -- independent of ada/adb's own port a scanning. gain and offset both
+    -- reply on address 0, so the readbacks are done one at a time (gain
+    -- first, then offset) the way a real host would.
     bus_test : process(simulator_clock)
         variable cycle : natural := 0;
     begin
@@ -214,18 +216,22 @@ begin
             -- gain and offset are full 32-bit signed bus words, through
             -- write_data_to_address's std_logic_vector overload, read
             -- straight back as signed 32 bit
-            if cycle = 30 then
+            if cycle >= 1 and cycle <= 16 then
+                write_data_to_address(bus_to_adc_scaler, gain_ram_address + (cycle - 1), gain_values(cycle - 1));
+            elsif cycle >= 17 and cycle <= 32 then
+                write_data_to_address(bus_to_adc_scaler, offset_ram_address + (cycle - 17), offset_values(cycle - 17));
+            elsif cycle = 200 then
                 write_data_to_address(bus_to_adc_scaler, gain_ram_address + bus_test_channel, bus_test_new_gain);
-            elsif cycle = 35 then
+            elsif cycle = 205 then
                 write_data_to_address(bus_to_adc_scaler, offset_ram_address + bus_test_channel, bus_test_new_offset);
-            elsif cycle = 36 then
+            elsif cycle = 220 then
                 -- port b writes land in the same memory ada's own port a
                 -- scan reads from, so channel bus_test_channel's expected
                 -- value changes from here on
                 expected_ada(bus_test_channel) <= integer(raw_value * bus_test_new_gain_real + bus_test_new_offset_real);
-            elsif cycle = 40 then
+            elsif cycle = 240 then
                 request_data_from_address(bus_to_adc_scaler, gain_ram_address + bus_test_channel);
-            elsif cycle = 100 then
+            elsif cycle = 300 then
                 request_data_from_address(bus_to_adc_scaler, offset_ram_address + bus_test_channel);
             end if;
 
@@ -330,8 +336,6 @@ begin
     u_adc_scale_pipeline : entity work.adc_scale_pipeline
     generic map(
         g_radix => scaler_radix
-        ,g_gain_values   => gain_values
-        ,g_offset_values => offset_values
         ,g_gain_ram_address   => gain_ram_address
         ,g_offset_ram_address => offset_ram_address
     )
@@ -342,6 +346,9 @@ begin
         ,muxed_adc_a_out => muxed_adc_a_out
         ,muxed_adc_b_out => muxed_adc_b_out
         ,adc_scale_pipeline_out => adc_scale_pipeline_out
+        ,dbg_a         => open
+        ,dbg_b         => open
+        ,dbg_result_or => open
     );
 ------------------------------------------------------------------------
 end vunit_simulation;
