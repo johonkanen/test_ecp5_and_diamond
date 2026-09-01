@@ -2,12 +2,14 @@
 """Generate the memory-initialisation files for the adc_scaler gain / offset
 EBR IP cores.
 
-  ip/adc_scaler_gain_ram_init.mem    512 x 32, every word = identity gain
-                                     = 2**radix  (radix 20 -> 0x00100000)
-  ip/adc_scaler_offset_ram_init.mem  512 x 32, every word = 0
+  ip/adc_scaler_gain_ram_init.mem    512 x 32, every word = DEFAULT_GAIN
+  ip/adc_scaler_offset_ram_init.mem  512 x 32, every word = DEFAULT_OFFSET
 
-Only channels 0..15 are used, but the RAM is 512 deep so every word is
-filled -- a stray address then still reads identity / zero, not garbage.
+The defaults are a measured calibration (radix 20) rather than identity
+gain / zero offset, so an uncalibrated channel already reads close to the
+right value. Only channels 0..15 are used, but the RAM is 512 deep so
+every word is filled -- a stray address then still reads the default,
+not garbage.
 
 Format: Diamond .mem "AddrHex" (see Diamond help "Memory Initialization
 File Format"). Header first (no comments allowed before it), then
@@ -22,6 +24,8 @@ DEPTH = 512
 WIDTH = 32
 RADIX = 20                       # source/top.vhd : constant adc_scaler_radix
 IDENTITY_GAIN = 1 << RADIX       # 0x00100000
+DEFAULT_GAIN   =   210645        # radix 20 -> +0.20089 , 0x000336D5
+DEFAULT_OFFSET = -4848148        # radix 20 -> -4.62360 , 0xFFB605EC
 HEX_DIGITS   = WIDTH // 4                       # 8
 ADDR_DIGITS  = ((DEPTH - 1).bit_length() + 3) // 4   # 3  (0..0x1FF)
 
@@ -29,6 +33,7 @@ HERE = Path(__file__).resolve().parent
 
 
 def write_mem(path: Path, value: int, addressed: bool) -> None:
+    value &= (1 << WIDTH) - 1                       # two's complement for negatives
     fmt = "AddrHex" if addressed else "Hex"
     lines = [
         f"#Format={fmt}",
@@ -56,8 +61,8 @@ def main() -> None:
                          "instead of 'AddrHex'")
     args = ap.parse_args()
 
-    write_mem(HERE / "adc_scaler_gain_ram_init.mem", IDENTITY_GAIN, not args.plain)
-    write_mem(HERE / "adc_scaler_offset_ram_init.mem", 0, not args.plain)
+    write_mem(HERE / "adc_scaler_gain_ram_init.mem", DEFAULT_GAIN, not args.plain)
+    write_mem(HERE / "adc_scaler_offset_ram_init.mem", DEFAULT_OFFSET, not args.plain)
 
 
 if __name__ == "__main__":

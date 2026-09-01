@@ -1,7 +1,8 @@
 -- Behavioural stand-in for the Lattice RAM_DP IP core
 -- ip/main_clocks/adc_scaler_offset_ram : 512 x 32, one write port + one
 -- read port, 2-cycle registered read (RdAddress -> Q). Power-up contents
--- match ip/adc_scaler_offset_ram_init.mem : every word = 0.
+-- match ip/adc_scaler_offset_ram_init.mem : every word = 0xFFB605EC
+-- (default offset -4848148, radix 20 -> -4.6236).
 --
 -- See sim_adc_scaler_gain_ram.vhd for how this is wired into the two
 -- build flows.
@@ -26,7 +27,7 @@ end entity;
 
 architecture sim of adc_scaler_offset_ram is
     type mem_t is array (0 to 511) of std_logic_vector(31 downto 0);
-    signal mem   : mem_t := (others => (others => '0'));
+    signal mem   : mem_t := (others => x"FFB605EC");
     signal q_reg : std_logic_vector(31 downto 0) := (others => '0');
 begin
 

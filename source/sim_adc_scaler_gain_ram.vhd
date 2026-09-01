@@ -2,8 +2,9 @@
 -- ip/main_clocks/adc_scaler_gain_ram : 512 x 32, one write port + one
 -- read port, 2-cycle registered read (RdAddress -> Q : address register
 -- + OUTREG). Power-up contents match ip/adc_scaler_gain_ram_init.mem :
--- every word = 0x00100000 (identity gain, radix 20). Regenerate that
--- .mem AND update the init here together if the radix changes.
+-- every word = 0x000336D5 (default gain 210645, radix 20 -> +0.20089).
+-- Regenerate that .mem AND update the init here together if the default
+-- calibration changes.
 --
 -- Same entity name as the SCUBA netlist so adc_scale_pipeline can
 -- instantiate `entity work.adc_scaler_gain_ram` in both flows (the real
@@ -30,7 +31,7 @@ end entity;
 
 architecture sim of adc_scaler_gain_ram is
     type mem_t is array (0 to 511) of std_logic_vector(31 downto 0);
-    signal mem   : mem_t := (others => x"00100000");
+    signal mem   : mem_t := (others => x"000336D5");
     signal q_reg : std_logic_vector(31 downto 0) := (others => '0');
 begin
 

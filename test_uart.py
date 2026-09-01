@@ -66,6 +66,17 @@ adc_scaler_gain_base   = bus_constants["adc_scaler_gain_ram_address"]
 adc_scaler_offset_base = bus_constants["adc_scaler_offset_ram_address"]
 adc_scaler_radix = 20  # source/top.vhd : constant adc_scaler_radix
 
+# the scaled adc registers hold a plain integer  raw*gain + offset  (the
+# fixed-point >> radix already done in hw). calibrate_channel fits that to
+# volt * out_per_volt, so dividing the integer back by the same factor
+# gives the real value. keep this equal to calibrate_channel's out_per_volt.
+adc_scaled_out_per_volt = 1000.0   # 1000 -> integer is millivolts, real is volts
+
+def scaled_to_real(value):
+    """scaled-register integer(s) -> real value (volts, given the default
+    out_per_volt). accepts a scalar or a numpy array."""
+    return np.asarray(value) / adc_scaled_out_per_volt
+
 def read_adc_scaler_gain(channel):
     return to_signed32(get(adc_scaler_gain_base + channel))
 
@@ -125,64 +136,103 @@ def _poll_stable_mean(channel, points, tol, attempts):
 
 def _fit_and_write(channel, raws, volts, out_per_volt):
     """least-squares fit  scaled = raw*gain + offset  through
-    (mean_raw, volt*out_per_volt) and write the fixed-point gain/offset."""
+    (mean_raw, volt*out_per_volt) ; print the calibration numbers and
+    write the radix-<adc_scaler_radix> fixed-point gain/offset to the fpga."""
     scale = 1 << adc_scaler_radix
     name = _channel_name(channel)
     targets = [v * out_per_volt for v in volts]
-    m, b = np.polyfit(raws, targets, 1)                # scaled = m*raw + b
-    gain, offset = int(round(m * scale)), int(round(b * scale))
-    for label, val in (("gain", gain), ("offset", offset)):
+    m, b = np.polyfit(raws, targets, 1)                       # scaled = m*raw + b
+    gain_fp, offset_fp = int(round(m * scale)), int(round(b * scale))
+    for label, val in (("gain", gain_fp), ("offset", offset_fp)):
         if not -(2 ** 31) <= val <= 2 ** 31 - 1:
             raise ValueError("%s %s %+d does not fit signed 32 bit" % (name, label, val))
-    write_adc_scaler_gain(channel, gain)
-    write_adc_scaler_offset(channel, offset)
     resid = max(abs(t - (m * r + b)) for r, t in zip(raws, targets))
-    print("  %-8s gain %+d (%.6g/count)  offset %+d (%+.2f)  max residual %.2f"
-          % (name, gain, m, offset, b, resid))
-    return gain, offset
 
-def calibrate_channel(channel, volts=(1.0, 2.0, 3.0), out_per_volt=1000.0,
-                      points=20000, tol=1.0, attempts=8):
+    print()
+    print("  %s  (%d points, out_per_volt %.1f)" % (name, len(volts), out_per_volt))
+    for v, r in zip(volts, raws):
+        print("      %+8.4f V   raw %10.2f   -> %10.2f" % (v, r, m * r + b))
+    print("    scaled = raw * %.10g  +  %.6g" % (m, b))
+    print("    gain   %.10f  ->  radix-%d fixed  %d  (0x%08X)"
+          % (m, adc_scaler_radix, gain_fp, gain_fp & 0xffffffff))
+    print("    offset %.6f  ->  radix-%d fixed  %d  (0x%08X)"
+          % (b, adc_scaler_radix, offset_fp, offset_fp & 0xffffffff))
+    print("    max fit residual  %.3f" % resid)
+
+    write_adc_scaler_gain(channel, gain_fp)
+    write_adc_scaler_offset(channel, offset_fp)
+    print("    written to fpga : gain @%d = %d, offset @%d = %d"
+          % (adc_scaler_gain_base + channel, gain_fp,
+             adc_scaler_offset_base + channel, offset_fp))
+    return gain_fp, offset_fp
+
+def calibrate_channel(channel, out_per_volt=1000.0, points=20000, tol=1.0, attempts=8):
     """Multi-point fixed-point calibration of one adc channel.
 
-    For each reference voltage in <volts> : prompts you to apply it, polls
-    the channel until three successive <points>-sample means agree within
-    <tol> (the "3 correct values"), and records the mean raw code. Then
-    least-squares fits  scaled = raw*gain + offset  through
-    (mean_raw, volt * out_per_volt) and writes the fixed-point gain and
-    offset (radix adc_scaler_radix).
+    Prompts '  1. value : ', '  2. value : ', ... : set the reference on
+    the channel's input, type its voltage, press enter. After each entry
+    the channel is polled until three successive <points>-sample means
+    agree within <tol> (the "3 correct values") and the mean raw code is
+    recorded. Blank line finishes (needs >= 2 points).
 
-    out_per_volt sets what the scaled register then reads : 1000 (default)
+    Then least-squares fits  scaled = raw*gain + offset  through
+    (mean_raw, volt * out_per_volt), prints the calibration, and writes
+    the radix-<adc_scaler_radix> fixed-point gain and offset to the fpga.
+
+    out_per_volt : what the scaled register then reads -- 1000 (default)
     -> millivolts, (1 << adc_scaler_radix) -> volts as radix-20 fixed point.
     """
     if not 0 <= channel <= 15:
         raise ValueError("channel must be 0..15 (0..7 = ada, 8..15 = adb)")
-    if len(volts) < 2:
-        raise ValueError("need at least two reference voltages for gain + offset")
 
     name = _channel_name(channel)
     write_adc_scaler_gain(channel, 1 << adc_scaler_radix)   # identity : streamed == raw
     write_adc_scaler_offset(channel, 0)
 
-    raws = []
-    for v in volts:
-        input("apply %+.4f V to %s and press enter " % (v, name))
-        raws.append(_poll_stable_mean(channel, points, tol, attempts))
-        print("  %-8s %+.4f V  ->  raw %.2f" % (name, v, raws[-1]))
+    print("calibrating %s -- set the reference, type its voltage, enter ; blank line to finish" % name)
+    volts, raws = [], []
+    while True:
+        s = input("  %d. value : " % (len(volts) + 1)).strip()
+        if s == "":
+            if len(volts) >= 2:
+                break
+            print("     need at least two points")
+            continue
+        try:
+            v = float(s)
+        except ValueError:
+            print("     not a number")
+            continue
+        raw = _poll_stable_mean(channel, points, tol, attempts)
+        volts.append(v)
+        raws.append(raw)
+        print("     %+.4f V  ->  raw %.2f" % (v, raw))
 
     return _fit_and_write(channel, raws, volts, out_per_volt)
 
-def calibrate_all(volts=(1.0, 2.0, 3.0), out_per_volt=1000.0,
-                  points=20000, tol=1.0, attempts=8):
+def calibrate_all(out_per_volt=1000.0, points=20000, tol=1.0, attempts=8):
     """calibrate_channel for all 16 channels in one reference sweep : each
-    voltage is applied once (to every adc input) and all channels measured."""
+    reference voltage is applied once to every adc input, all channels
+    measured, then every channel fitted and written."""
     for ch in range(16):
         write_adc_scaler_gain(ch, 1 << adc_scaler_radix)
         write_adc_scaler_offset(ch, 0)
 
-    raws = {ch: [] for ch in range(16)}
-    for v in volts:
-        input("apply %+.4f V to all adc inputs and press enter " % v)
+    print("calibrating all 16 channels -- apply each reference to every input, type its voltage")
+    volts, raws = [], {ch: [] for ch in range(16)}
+    while True:
+        s = input("  %d. value : " % (len(volts) + 1)).strip()
+        if s == "":
+            if len(volts) >= 2:
+                break
+            print("     need at least two points")
+            continue
+        try:
+            v = float(s)
+        except ValueError:
+            print("     not a number")
+            continue
+        volts.append(v)
         for ch in range(16):
             raws[ch].append(_poll_stable_mean(ch, points, tol, attempts))
 
@@ -191,7 +241,12 @@ def calibrate_all(volts=(1.0, 2.0, 3.0), out_per_volt=1000.0,
 def test_hw():
     print("reading all registers")
     for address, name in registers.items():
-        print(address, name, to_signed32(get(address)))
+        value = to_signed32(get(address))
+        if name.startswith(("ada_ch", "adb_ch")):
+            print("  @%-4d %-14s %12d   (%+.4f V)"
+                  % (address, name, value, value / adc_scaled_out_per_volt))
+        else:
+            print("  @%-4d %-14s %12d" % (address, name, value))
 
     read_adc_scaler_calibration()
     read_adc_raw_all()
@@ -202,10 +257,17 @@ def test_hw():
     pyplot.plot(signed_stream)
 
     print("streaming", adc_stream_length, "points from each of", len(adc_channel_addresses), "adc mux positions")
+    print("  %-8s %-5s %13s %13s" % ("channel", "@addr", "scaled int", "scaled real"))
     pyplot.figure()
     for name, address in sorted(adc_channel_addresses.items(), key=lambda item: item[1]):
         channel_stream = to_signed32(uart.stream_data_from_address(address, adc_stream_length))
-        pyplot.plot(channel_stream, label=name)
+        real_stream = scaled_to_real(channel_stream)
+        print("  %-8s @%-4d %13.1f %11.4f V"
+              % (name, address, channel_stream.mean(), real_stream.mean()))
+        pyplot.plot(real_stream, label=name)
+    pyplot.xlabel("sample")
+    pyplot.ylabel("scaled value [V]")
+    pyplot.title("adc scaled channels (real values)")
     pyplot.legend()
 
     pyplot.show()
