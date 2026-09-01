@@ -102,6 +102,92 @@ def read_adc_scaler_calibration():
               % (name, adc_scaler_gain_base + channel, gain, gain / scale,
                  adc_scaler_offset_base + channel, offset, offset / scale))
 
+def _channel_name(channel):
+    return "ada_ch%d" % channel if channel < 8 else "adb_ch%d" % (channel - 8)
+
+def _scaled_mean(channel, points):
+    address = bus_constants["address_ada_ch0"] + channel
+    return float(np.mean(to_signed32(uart.stream_data_from_address(address, points))))
+
+def _poll_stable_mean(channel, points, tol, attempts):
+    """Stream <points> samples three times ; return the mean once the
+    three means agree within <tol> (the input has settled)."""
+    name = _channel_name(channel)
+    for _ in range(attempts):
+        means = [_scaled_mean(channel, points) for _ in range(3)]
+        spread = max(means) - min(means)
+        print("  %-8s means [%s]  spread %.2f"
+              % (name, ", ".join("%.1f" % m for m in means), spread))
+        if spread <= tol:
+            return sum(means) / 3.0
+    raise RuntimeError("%s did not settle within tol %.2f after %d attempts"
+                       % (name, tol, attempts))
+
+def _fit_and_write(channel, raws, volts, out_per_volt):
+    """least-squares fit  scaled = raw*gain + offset  through
+    (mean_raw, volt*out_per_volt) and write the fixed-point gain/offset."""
+    scale = 1 << adc_scaler_radix
+    name = _channel_name(channel)
+    targets = [v * out_per_volt for v in volts]
+    m, b = np.polyfit(raws, targets, 1)                # scaled = m*raw + b
+    gain, offset = int(round(m * scale)), int(round(b * scale))
+    for label, val in (("gain", gain), ("offset", offset)):
+        if not -(2 ** 31) <= val <= 2 ** 31 - 1:
+            raise ValueError("%s %s %+d does not fit signed 32 bit" % (name, label, val))
+    write_adc_scaler_gain(channel, gain)
+    write_adc_scaler_offset(channel, offset)
+    resid = max(abs(t - (m * r + b)) for r, t in zip(raws, targets))
+    print("  %-8s gain %+d (%.6g/count)  offset %+d (%+.2f)  max residual %.2f"
+          % (name, gain, m, offset, b, resid))
+    return gain, offset
+
+def calibrate_channel(channel, volts=(1.0, 2.0, 3.0), out_per_volt=1000.0,
+                      points=20000, tol=1.0, attempts=8):
+    """Multi-point fixed-point calibration of one adc channel.
+
+    For each reference voltage in <volts> : prompts you to apply it, polls
+    the channel until three successive <points>-sample means agree within
+    <tol> (the "3 correct values"), and records the mean raw code. Then
+    least-squares fits  scaled = raw*gain + offset  through
+    (mean_raw, volt * out_per_volt) and writes the fixed-point gain and
+    offset (radix adc_scaler_radix).
+
+    out_per_volt sets what the scaled register then reads : 1000 (default)
+    -> millivolts, (1 << adc_scaler_radix) -> volts as radix-20 fixed point.
+    """
+    if not 0 <= channel <= 15:
+        raise ValueError("channel must be 0..15 (0..7 = ada, 8..15 = adb)")
+    if len(volts) < 2:
+        raise ValueError("need at least two reference voltages for gain + offset")
+
+    name = _channel_name(channel)
+    write_adc_scaler_gain(channel, 1 << adc_scaler_radix)   # identity : streamed == raw
+    write_adc_scaler_offset(channel, 0)
+
+    raws = []
+    for v in volts:
+        input("apply %+.4f V to %s and press enter " % (v, name))
+        raws.append(_poll_stable_mean(channel, points, tol, attempts))
+        print("  %-8s %+.4f V  ->  raw %.2f" % (name, v, raws[-1]))
+
+    return _fit_and_write(channel, raws, volts, out_per_volt)
+
+def calibrate_all(volts=(1.0, 2.0, 3.0), out_per_volt=1000.0,
+                  points=20000, tol=1.0, attempts=8):
+    """calibrate_channel for all 16 channels in one reference sweep : each
+    voltage is applied once (to every adc input) and all channels measured."""
+    for ch in range(16):
+        write_adc_scaler_gain(ch, 1 << adc_scaler_radix)
+        write_adc_scaler_offset(ch, 0)
+
+    raws = {ch: [] for ch in range(16)}
+    for v in volts:
+        input("apply %+.4f V to all adc inputs and press enter " % v)
+        for ch in range(16):
+            raws[ch].append(_poll_stable_mean(ch, points, tol, attempts))
+
+    return {ch: _fit_and_write(ch, raws[ch], volts, out_per_volt) for ch in range(16)}
+
 def test_hw():
     print("reading all registers")
     for address, name in registers.items():
