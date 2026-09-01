@@ -122,49 +122,48 @@ architecture behavioral of top is
 	
 	function init_ram return ram_array is
 		variable counter : unsigned(31 downto 0) := (others => '0');
-		variable retval : ram_array(0 to 511)(31 downto 0);
+		variable retval : ram_array(0 to 1023)(31 downto 0);
 	begin
-		for i in 0 to 511 loop
+		for i in 0 to 1023 loop
 			retval(i) := std_logic_vector(counter);
 			counter := counter + 1;
 		end loop;
-		
+
 		return retval;
 	end;
 	-----------------------------
 	-----------------------------
 
-    constant init_values : ram_array(0 to 511)(31 downto 0) := init_ram; --(others => (others => '0'));
+    constant init_values : ram_array(0 to 1023)(31 downto 0) := init_ram; --(others => (others => '0'));
     constant dp_ram_subtype : dpram_ref_record := create_ref_subtypes(
         datawidth      => 32
-        , addresswidth => 9);
+        , addresswidth => 10);
+    -- u_dpram is a simple-dual-port RAM : port a PURE READ (test_uart
+    -- process, all host reads), port b PURE WRITE (u_dpram_writer, host
+    -- test_memory writes + the adc results). one write port + one read
+    -- port is what synplify needs to keep this as a single coherent EBR
+    -- instead of splitting it into two disconnected copies. test_memory
+    -- lives at ram 0..611, the adc results just above it at 640..671.
     signal ram_a_in  : dp_ram_subtype.ram_in'subtype := dp_ram_subtype.ram_in;
     signal ram_a_out : dp_ram_subtype.ram_out'subtype;
-    -- port b of u_dpram is unused (scaled adc results moved to the
-    -- register array below) ; test_memory drives port a only.
     signal ram_b_in  : dp_ram_subtype.ram_in'subtype := dp_ram_subtype.ram_in;
     signal ram_b_out : dp_ram_subtype.ram_out'subtype;
 
-    -- per-channel adc results, 0..7 = ada mux positions, 8..15 = adb.
-    -- plain register arrays, not dual_port_ram : arch_rtl_dp_ram splits
-    -- every dual_port_ram into two disconnected single-port EBRs on this
-    -- synplify, so a value written by one process never reaches a read in
-    -- another -- that is what left the scaled results reading back zero.
-    -- syn_ramstyle "registers" keeps them as coherent FFs.
-    type adc_channel_array is array (0 to 15) of std_logic_vector(31 downto 0);
-    signal adc_scaled_channels : adc_channel_array := (others => (others => '0'));
-    signal adc_raw_channels    : adc_channel_array := (others => (others => '0'));
+    constant adc_scaled_ram_base : natural := 640;  -- ram addr 640..655 = scaled ch 0..15
+    constant adc_raw_ram_base    : natural := 656;  -- ram addr 656..671 = raw    ch 0..15
+
+    -- port b : one write port, three producers, drained one per cycle
+    -- (~250 cycles of slack per scan)
+    signal sc_pending, ra_pending, rb_pending : std_logic := '0';
+    signal sc_data, ra_data, rb_data : std_logic_vector(31 downto 0) := (others => '0');
+    signal sc_chan : natural range 0 to 15 := 0;
+    signal ra_chan : natural range 0 to 7  := 0;
+    signal rb_chan : natural range 8 to 15 := 8;
 
     -- debug: does adc_scale_pipeline_out ever pulse ready, and what value
     -- rides along when it does (independent of the per-channel demux)
     signal adc_ready_count : unsigned(31 downto 0) := (others => '0');
     signal adc_scaled_last : std_logic_vector(31 downto 0) := (others => '0');
-    signal adc_dbg_a       : std_logic_vector(31 downto 0);
-    signal adc_dbg_b       : std_logic_vector(31 downto 0);
-    signal adc_dbg_res_or  : std_logic_vector(31 downto 0);
-    attribute syn_ramstyle : string;
-    attribute syn_ramstyle of adc_scaled_channels : signal is "registers";
-    attribute syn_ramstyle of adc_raw_channels    : signal is "registers";
 
 	---
 
@@ -521,26 +520,8 @@ begin
 				connect_data_to_address(bus_from_communications           , bus_from_top , address_test_data9 , test_data9);
 				connect_read_only_data_to_address(bus_from_communications , bus_from_top , address_sine_result , sine_result);
 
-				-- per-channel adc results, straight out of their register
-				-- arrays : scaled at address_ada_ch0 .. address_adb_ch7
-				-- (16 contiguous), raw codes in the 16-address
-				-- adc_raw_ram_address window (ch 0..15)
-				for ch in 0 to 15 loop
-					connect_read_only_data_to_address(bus_from_communications, bus_from_top, address_ada_ch0 + ch, adc_scaled_channels(ch));
-				end loop;
 				connect_read_only_data_to_address(bus_from_communications, bus_from_top, address_adc_ready_count, std_logic_vector(adc_ready_count));
 				connect_read_only_data_to_address(bus_from_communications, bus_from_top, address_adc_scaled_last, adc_scaled_last);
-				connect_read_only_data_to_address(bus_from_communications, bus_from_top, address_adc_dbg_a, adc_dbg_a);
-				connect_read_only_data_to_address(bus_from_communications, bus_from_top, address_adc_dbg_b, adc_dbg_b);
-				connect_read_only_data_to_address(bus_from_communications, bus_from_top, address_adc_dbg_res_or, adc_dbg_res_or);
-
-				if read_is_requested(bus_from_communications)
-					and get_address(bus_from_communications) >= adc_raw_ram_address
-					and get_address(bus_from_communications) < adc_raw_ram_address + 16
-				then
-					write_data_to_address(bus_from_top, 0,
-						adc_raw_channels(get_address(bus_from_communications) - adc_raw_ram_address));
-				end if;
 
 				init_ram(ram_a_in);
 
@@ -556,7 +537,24 @@ begin
                 end if;
 
 				
+				-- port a is READ ONLY (keeps u_dpram a simple-dual-port EBR,
+				-- no split). adc result windows (scaled at
+				-- address_ada_ch0..adb_ch7, raw at adc_raw_ram_address..+16)
+				-- and test_memory all read here ; every write to this ram
+				-- goes through port b in u_dpram_writer.
 				if read_is_requested(bus_from_communications)
+					and get_address(bus_from_communications) >= address_ada_ch0
+					and get_address(bus_from_communications) <= address_adb_ch7
+				then
+					request_data_from_ram(ram_a_in,
+						adc_scaled_ram_base + (get_address(bus_from_communications) - address_ada_ch0));
+				elsif read_is_requested(bus_from_communications)
+					and get_address(bus_from_communications) >= adc_raw_ram_address
+					and get_address(bus_from_communications) < adc_raw_ram_address + 16
+				then
+					request_data_from_ram(ram_a_in,
+						adc_raw_ram_base + (get_address(bus_from_communications) - adc_raw_ram_address));
+				elsif read_is_requested(bus_from_communications)
 					and get_address(bus_from_communications) >= test_memory_address_low
 					and get_address(bus_from_communications) <= test_memory_address_high
 				then
@@ -565,13 +563,6 @@ begin
 
 				if ram_read_is_ready(ram_a_out) then
 					write_data_to_address(bus_from_top, 0, get_ram_data(ram_a_out));
-				end if;
-
-				if write_from_bus_is_requested(bus_from_communications)
-					and get_address(bus_from_communications) >= test_memory_write_address_low
-					and get_address(bus_from_communications) <= test_memory_write_address_high
-				then
-					write_data_to_ram(ram_a_in, get_address(bus_from_communications) - test_memory_write_address_low, get_slv_data(bus_from_communications));
 				end if;
 			
 			end if;
@@ -682,9 +673,6 @@ begin
                 ,muxed_adc_a_out        => muxed_adc_a_out
                 ,muxed_adc_b_out        => muxed_adc_b_out
                 ,adc_scale_pipeline_out => adc_scale_pipeline_out
-                ,dbg_a        => adc_dbg_a
-                ,dbg_b        => adc_dbg_b
-                ,dbg_result_or => adc_dbg_res_or
         );
 ------------------------------------------------------------------------
     u_dpram : entity work.dual_port_ram
@@ -712,35 +700,68 @@ begin
                     adb_next_channel <= std_logic_vector(unsigned(adb_next_channel) + 1);
                 end if;
 
-                -- scaled results and raw codes land in their register
-                -- arrays (0..7 = ada mux positions, 8..15 = adb). writes
-                -- are decoded per channel : a variable-index array write
-                -- makes synplify infer un-initialisable LUT RAM, so each
-                -- channel gets its own compare + enable and stays a FF.
-				for ch in 0 to 15 loop
-					if adc_ready(adc_scale_pipeline_out)
-						and to_integer(unsigned(get_channel(adc_scale_pipeline_out))) = ch
-					then
-						adc_scaled_channels(ch) <= get_scaled_value(adc_scale_pipeline_out);
-					end if;
-				end loop;
-
+                -- scaled results + raw codes are stored into port b of
+                -- u_dpram by u_dpram_writer below ; this process just
+                -- runs the scan and the debug taps.
 				if adc_ready(adc_scale_pipeline_out) then
 					adc_ready_count <= adc_ready_count + 1;
 					adc_scaled_last <= get_scaled_value(adc_scale_pipeline_out);
 				end if;
 
-				for ch in 0 to 7 loop
-					if adc_ready(muxed_adc_a_out) and get_sampled_mux_pos(muxed_adc_a_out) = ch then
-						adc_raw_channels(ch) <= std_logic_vector(resize(unsigned(get_adc_result(muxed_adc_a_out)), 32));
-					end if;
-					if adc_ready(muxed_adc_b_out) and get_sampled_mux_pos(muxed_adc_b_out) = ch then
-						adc_raw_channels(8 + ch) <= std_logic_vector(resize(unsigned(get_adc_result(muxed_adc_b_out)), 32));
-					end if;
-				end loop;
-
             end if;
         end process;
+
+------------------------------------------------------------------------
+    -- port b of u_dpram : the ONLY write port. host test_memory writes
+    -- plus the per-channel adc results. keeping every write on one port
+    -- (and every read on port a) is what stops synplify splitting this
+    -- into two disconnected copies. the adc results are latched and
+    -- drained one per cycle ; a host test_memory write (rare) takes the
+    -- port that cycle.
+    u_dpram_writer : process(clk120Mhz)
+        use work.fpga_interconnect_pkg.all;
+        use work.address_pkg.all;
+    begin
+        if rising_edge(clk120Mhz) then
+
+            init_ram(ram_b_in);
+
+            if adc_ready(adc_scale_pipeline_out) then
+                sc_data    <= get_scaled_value(adc_scale_pipeline_out);
+                sc_chan    <= to_integer(unsigned(get_channel(adc_scale_pipeline_out)));
+                sc_pending <= '1';
+            end if;
+            if adc_ready(muxed_adc_a_out) then
+                ra_data    <= std_logic_vector(resize(unsigned(get_adc_result(muxed_adc_a_out)), 32));
+                ra_chan    <= get_sampled_mux_pos(muxed_adc_a_out);
+                ra_pending <= '1';
+            end if;
+            if adc_ready(muxed_adc_b_out) then
+                rb_data    <= std_logic_vector(resize(unsigned(get_adc_result(muxed_adc_b_out)), 32));
+                rb_chan    <= 8 + get_sampled_mux_pos(muxed_adc_b_out);
+                rb_pending <= '1';
+            end if;
+
+            if write_from_bus_is_requested(bus_from_communications)
+                and get_address(bus_from_communications) >= test_memory_write_address_low
+                and get_address(bus_from_communications) <= test_memory_write_address_high
+            then
+                write_data_to_ram(ram_b_in,
+                    get_address(bus_from_communications) - test_memory_write_address_low,
+                    get_slv_data(bus_from_communications));
+            elsif sc_pending = '1' then
+                write_data_to_ram(ram_b_in, adc_scaled_ram_base + sc_chan, sc_data);
+                sc_pending <= '0';
+            elsif ra_pending = '1' then
+                write_data_to_ram(ram_b_in, adc_raw_ram_base + ra_chan, ra_data);
+                ra_pending <= '0';
+            elsif rb_pending = '1' then
+                write_data_to_ram(ram_b_in, adc_raw_ram_base + rb_chan, rb_data);
+                rb_pending <= '0';
+            end if;
+
+        end if;
+    end process;
 
 ------------------------------------------------------------------------
 end behavioral;

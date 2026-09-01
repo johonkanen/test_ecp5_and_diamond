@@ -43,15 +43,12 @@ package address_pkg is
     constant address_adb_ch6 : natural := 28;
     constant address_adb_ch7 : natural := 29;
 
-    -- debug taps for the scaled-adc datapath : ready-pulse counter (should
+    -- health taps for the scaled-adc datapath : ready-pulse counter (should
     -- climb steadily if adc_scale_pipeline_out.ready_with_1 ever fires)
     -- and the most recent scaled value captured on that pulse, regardless
     -- of which channel it was for
     constant address_adc_ready_count : natural := 30;
     constant address_adc_scaled_last : natural := 31;
-    constant address_adc_dbg_a       : natural := 32;
-    constant address_adc_dbg_b       : natural := 33;
-    constant address_adc_dbg_res_or  : natural := 34;
 
     -- adc_scale_pipeline's host-facing port b access (live gain/offset
     -- calibration read/write) : each constant is the base of one

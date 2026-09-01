@@ -89,7 +89,7 @@ def read_adc_raw_all():
     print("adc raw codes:")
     for channel in range(16):
         name = ("ada_ch%d" % channel) if channel < 8 else ("adb_ch%d" % (channel - 8))
-        print("  %-8s %5d" % (name, read_adc_raw(channel)))
+        print("  @%-4d %-8s %5d" % (adc_raw_base + channel, name, read_adc_raw(channel)))
 
 def read_adc_scaler_calibration():
     scale = float(2 ** adc_scaler_radix)
@@ -98,8 +98,9 @@ def read_adc_scaler_calibration():
         name = ("ada_ch%d" % channel) if channel < 8 else ("adb_ch%d" % (channel - 8))
         gain = read_adc_scaler_gain(channel)
         offset = read_adc_scaler_offset(channel)
-        print("  %-8s gain %11d (%+.4f)   offset %11d (%+.4f)"
-              % (name, gain, gain / scale, offset, offset / scale))
+        print("  %-8s gain @%-4d %11d (%+.4f)   offset @%-4d %11d (%+.4f)"
+              % (name, adc_scaler_gain_base + channel, gain, gain / scale,
+                 adc_scaler_offset_base + channel, offset, offset / scale))
 
 def test_hw():
     print("reading all registers")

@@ -1,0 +1,29 @@
+SCUBA, Version Diamond (64-bit) 3.14.0.75.2  Patch Version(s) 132427
+Tue Sep 01 06:38:06 2026
+
+Copyright (c) 1991-1994 by NeoCAD Inc. All rights reserved.
+Copyright (c) 1995 AT&T Corp.   All rights reserved.
+Copyright (c) 1995-2001 Lucent Technologies Inc.  All rights reserved.
+Copyright (c) 2001 Agere Systems   All rights reserved.
+Copyright (c) 2002-2024 Lattice Semiconductor Corporation,  All rights reserved.
+
+    Issued command   : D:\lscc\diamond\3.14\ispfpga\bin\nt64\scuba.exe -w -n adc_scaler_gain_ram -lang vhdl -synth synplify -bus_exp 7 -bb -arch sa5p00 -type ramdps -device LFE5U-12F -raddr_width 9 -rwidth 32 -waddr_width 9 -wwidth 32 -rnum_words 512 -wnum_words 512 -outdata REGISTERED -cascade -1 -resetmode SYNC -sync_reset -memfile c:/dev/test_ecp5_and_diamond/ip/adc_scaler_gain_ram_init.mem -memformat orca -fdc C:/dev/test_ecp5_and_diamond/ip/main_clocks/adc_scaler_gain_ram/adc_scaler_gain_ram.fdc 
+    Circuit name     : adc_scaler_gain_ram
+    Module type      : RAM_DP
+    Module Version   : 6.5
+    Ports            : 
+	Inputs       : WrAddress[8:0], RdAddress[8:0], Data[31:0], WE, RdClock, RdClockEn, Reset, WrClock, WrClockEn
+	Outputs      : Q[31:0]
+    I/O buffer       : not inserted
+    Memory file      : c:/dev/test_ecp5_and_diamond/ip/adc_scaler_gain_ram_init.mem
+    EDIF output      : adc_scaler_gain_ram.edn
+    VHDL output      : adc_scaler_gain_ram.vhd
+    VHDL template    : adc_scaler_gain_ram_tmpl.vhd
+    VHDL testbench    : tb_adc_scaler_gain_ram_tmpl.vhd
+    VHDL purpose     : for synthesis and simulation
+    Bus notation     : big endian
+    Report output    : adc_scaler_gain_ram.srp
+    Element Usage    :
+       PDPW16KD : 1
+    Estimated Resource Usage:
+            EBR : 1

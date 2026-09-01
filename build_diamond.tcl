@@ -64,7 +64,12 @@ add_vhdl_file_to_project $path_to_this_file/source/fpga_communication/ecp5/ecp5_
 add_vhdl_file_to_project $path_to_this_file/source/fpga_communication/ecp5/ecp5_serial_protocol_generic_pkg.vhd
 # microprogram processor modules
 add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/source/hVHDL_memory_library/vhdl2008/dp_ram_w_configurable_recrods.vhd
-add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/source/hVHDL_memory_library/vhdl2008/arch_rtl_dp_ram_w_configurable_records.vhd
+# true-dual-port architecture shaped to the canonical vendor template
+# (write-first if/else, two processes, one shared variable). the stock
+# arch_rtl_dp_ram_w_configurable_records.vhd and the single-process
+# variant both split into two disconnected single-port EBRs on this
+# Synplify.
+add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/source/hVHDL_memory_library/vhdl2008/arch_rtl_dp_ram_tdp_1clk_w_configurable_records.vhd
 add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/source/hVHDL_memory_library/vhdl2008/mpram_w_configurable_records.vhd
 
 add_vhdl_file_to_project $path_to_this_file/source/hVHDL_microprogam_processor/vhdl2008/vhdl2008_microinstruction_pkg.vhd

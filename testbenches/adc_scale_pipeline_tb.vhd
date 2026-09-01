@@ -346,9 +346,6 @@ begin
         ,muxed_adc_a_out => muxed_adc_a_out
         ,muxed_adc_b_out => muxed_adc_b_out
         ,adc_scale_pipeline_out => adc_scale_pipeline_out
-        ,dbg_a         => open
-        ,dbg_b         => open
-        ,dbg_result_or => open
     );
 ------------------------------------------------------------------------
 end vunit_simulation;

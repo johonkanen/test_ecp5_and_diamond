@@ -11,6 +11,16 @@ parser.add_argument(
     action="store_true",
     help="Enable dumping arrays in the NVC simulator"
 )
+parser.add_argument(
+    "--dp-ram-arch",
+    choices=["sim", "rtl", "rtl-single-process", "tdp-1clk"],
+    default="sim",
+    help="which dual_port_ram architecture to compile for simulation "
+         "(sim = protected type, default ; rtl = stock two-process shared "
+         "variable, the one Synplify splits ; rtl-single-process = single "
+         "process ; tdp-1clk = the true-dual-port vendor-template arch the "
+         "ecp5 build uses)"
+)
 args, vunit_args = parser.parse_known_args()
 
 ROOT = Path(__file__).resolve().parent
@@ -21,9 +31,16 @@ MPROC = "source/hVHDL_microprogam_processor"
 
 v2008 = VU.add_library("v2008")
 
+_DP_RAM_ARCH = {
+    "sim": "arch_sim_dp_ram_w_configurable_records.vhd",
+    "rtl": "arch_rtl_dp_ram_w_configurable_records.vhd",
+    "rtl-single-process": "arch_rtl_dp_ram_single_process_w_configurable_records.vhd",
+    "tdp-1clk": "arch_rtl_dp_ram_tdp_1clk_w_configurable_records.vhd",
+}[args.dp_ram_arch]
+
 v2008.add_source_files(ROOT / MPROC / "source/hVHDL_fixed_point/real_to_fixed/real_to_fixed_pkg.vhd")
 v2008.add_source_files(ROOT / MPROC / "source/hVHDL_memory_library/vhdl2008/dp_ram_w_configurable_recrods.vhd")
-v2008.add_source_files(ROOT / MPROC / "source/hVHDL_memory_library/vhdl2008/arch_sim_dp_ram_w_configurable_records.vhd")
+v2008.add_source_files(ROOT / MPROC / "source/hVHDL_memory_library/vhdl2008" / _DP_RAM_ARCH)
 v2008.add_source_files(ROOT / MPROC / "source/hVHDL_memory_library/vhdl2008/mpram_w_configurable_records.vhd")
 v2008.add_source_files(ROOT / MPROC / "source/hVHDL_floating_point/vhdl2008/*.vhd")
 v2008.add_source_files(ROOT / MPROC / "source/hVHDL_floating_point/vhdl2008/altera/multiply_add_arch_agilex.vhd")
@@ -89,6 +106,12 @@ v2008.add_source_files(ROOT / "testbenches/ads7056_entity_tb.vhd")
 
 v2008.add_source_files(ROOT / "source" / "muxed_adc.vhd")
 v2008.add_source_files(ROOT / "testbenches/muxed_adc_tb.vhd")
+
+# behavioural stand-ins for the Lattice RAM_DP IP cores under
+# ip/main_clocks/ (the real SCUBA netlists come in via main_clocks.sbx in
+# the Diamond build)
+v2008.add_source_files(ROOT / "source" / "sim_adc_scaler_gain_ram.vhd")
+v2008.add_source_files(ROOT / "source" / "sim_adc_scaler_offset_ram.vhd")
 
 v2008.add_source_files(ROOT / "source" / "adc_scale_pipeline.vhd")
 v2008.add_source_files(ROOT / "testbenches/adc_scale_pipeline_tb.vhd")
@@ -160,5 +183,12 @@ ode.add_source_files(ROOT / "misc/lc_filter_ode_tb.vhd")
 
 if args.dump_arrays:
     VU.set_sim_option("nvc.sim_flags", ["-w", "--dump-arrays"])
+
+# the shared-variable dual_port_ram archs ('rtl', 'tdp-1clk') use a
+# non-protected shared variable (VHDL-93 style) which NVC rejects under
+# --std=2008 ; --relaxed downgrades that to a warning. set here, after
+# all files are added, so it reaches every source file.
+if args.dp_ram_arch in ("rtl", "tdp-1clk"):
+    VU.set_compile_option("nvc.a_flags", ["--relaxed"])
 
 VU.main()
